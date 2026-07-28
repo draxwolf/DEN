@@ -1,0 +1,2437 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>DEN — Deployable Everywhere Noticeboard</title>
+</head>
+<body>
+<style>
+/* ─────────────────────────────────────────────────────────────
+   Reset
+   ───────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; }
+* { margin: 0; }
+html { height: 100%; }
+body { min-height: 100%; }
+button, input, textarea, select { font: inherit; color: inherit; }
+button { background: none; border: 0; cursor: pointer; }
+a { color: inherit; }
+
+/* ─────────────────────────────────────────────────────────────
+   Tokens — two-ink riso palette on cool stock
+   ───────────────────────────────────────────────────────────── */
+:root {
+  --stock:      #E4E6EA;   /* paper */
+  --stock-well: #D6D9E0;   /* recessed lane */
+  --stock-card: #F4F5F7;   /* raised card */
+  --stock-bar:  #EDEEF1;   /* top bar */
+  --rule:       #C0C5D0;
+  --rule-soft:  #D0D4DC;
+  --dot:        #B9BFCB;
+
+  --ink:    #14161D;       /* near-black, blue bias */
+  --ink-2:  #4C5364;
+  --ink-3:  #79808F;
+
+  --blue:   #2A3BD0;       /* ink one */
+  --blue-w: #E2E4FA;       /* blue wash */
+  --hot:    #E1550A;       /* ink two — attention, scarce */
+  --hot-w:  #FBE3D4;
+
+  --on-ink: #F6F7F9;
+
+  --shadow: 0 1px 0 rgba(20,22,29,.05), 0 6px 18px -10px rgba(20,22,29,.35);
+  --shadow-lift: 0 2px 2px rgba(20,22,29,.08), 0 22px 40px -18px rgba(20,22,29,.55);
+
+  --font-display: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+  --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", "IBM Plex Mono", "Roboto Mono", Menlo, Consolas, monospace;
+  --font-ui: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+
+  --rail-gap: 14px;
+  --lane-w: 292px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --stock:      #0F1116;
+    --stock-well: #0A0C10;
+    --stock-card: #191D25;
+    --stock-bar:  #14171E;
+    --rule:       #2B313D;
+    --rule-soft:  #22272F;
+    --dot:        #1C212A;
+
+    --ink:    #E9EBF0;
+    --ink-2:  #A3AAB9;
+    --ink-3:  #737A89;
+
+    --blue:   #7285FF;
+    --blue-w: #1B2140;
+    --hot:    #FF8A44;
+    --hot-w:  #3A2214;
+
+    --on-ink: #0B0D11;
+
+    --shadow: 0 1px 0 rgba(0,0,0,.4), 0 8px 20px -12px rgba(0,0,0,.9);
+    --shadow-lift: 0 2px 4px rgba(0,0,0,.5), 0 26px 44px -20px rgba(0,0,0,1);
+  }
+}
+
+:root[data-theme="light"] {
+  --stock:#E4E6EA; --stock-well:#D6D9E0; --stock-card:#F4F5F7; --stock-bar:#EDEEF1;
+  --rule:#C0C5D0; --rule-soft:#D0D4DC; --dot:#B9BFCB;
+  --ink:#14161D; --ink-2:#4C5364; --ink-3:#79808F;
+  --blue:#2A3BD0; --blue-w:#E2E4FA; --hot:#E1550A; --hot-w:#FBE3D4;
+  --on-ink:#F6F7F9;
+  --shadow: 0 1px 0 rgba(20,22,29,.05), 0 6px 18px -10px rgba(20,22,29,.35);
+  --shadow-lift: 0 2px 2px rgba(20,22,29,.08), 0 22px 40px -18px rgba(20,22,29,.55);
+}
+:root[data-theme="dark"] {
+  --stock:#0F1116; --stock-well:#0A0C10; --stock-card:#191D25; --stock-bar:#14171E;
+  --rule:#2B313D; --rule-soft:#22272F; --dot:#1C212A;
+  --ink:#E9EBF0; --ink-2:#A3AAB9; --ink-3:#737A89;
+  --blue:#7285FF; --blue-w:#1B2140; --hot:#FF8A44; --hot-w:#3A2214;
+  --on-ink:#0B0D11;
+  --shadow: 0 1px 0 rgba(0,0,0,.4), 0 8px 20px -12px rgba(0,0,0,.9);
+  --shadow-lift: 0 2px 4px rgba(0,0,0,.5), 0 26px 44px -20px rgba(0,0,0,1);
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Shell
+   ───────────────────────────────────────────────────────────── */
+body {
+  font-family: var(--font-ui);
+  background: var(--stock);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+}
+#app {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Controls stay reachable however far down the board runs. */
+.topbar {
+  position: sticky; top: 0; z-index: 40;
+  background: var(--stock-bar);
+  border-bottom: 1px solid var(--rule);
+}
+
+:where(a, button, input, textarea, select, [tabindex]):focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+.mono { font-family: var(--font-mono); }
+.tnum { font-variant-numeric: tabular-nums; }
+
+.label {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: .13em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+/* Buttons ---------------------------------------------------- */
+.btn {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  padding: 7px 11px;
+  border: 1px solid var(--rule);
+  background: transparent;
+  transition: background-color .12s, color .12s, border-color .12s;
+  white-space: nowrap;
+}
+.btn:hover { color: var(--ink); border-color: var(--ink-3); background: color-mix(in srgb, var(--ink) 5%, transparent); }
+.btn[aria-pressed="true"], .btn.is-primary {
+  background: var(--blue); border-color: var(--blue); color: var(--on-ink);
+}
+.btn[aria-pressed="true"]:hover, .btn.is-primary:hover {
+  background: color-mix(in srgb, var(--blue) 85%, var(--ink)); color: var(--on-ink);
+}
+.btn.is-danger:hover { border-color: var(--hot); color: var(--hot); background: transparent; }
+.btn:disabled { opacity: .4; cursor: not-allowed; }
+
+/* ─────────────────────────────────────────────────────────────
+   Top bar
+   ───────────────────────────────────────────────────────────── */
+.bar {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 13px 20px;
+  flex-wrap: wrap;
+}
+.brand { display: flex; align-items: baseline; gap: 12px; min-width: 0; }
+.brand__mark {
+  width: 11px; height: 22px;
+  background: var(--blue);
+  box-shadow: 5px 0 0 var(--hot);
+  margin-right: 8px;
+  align-self: center;
+  flex: none;
+}
+.brand__title {
+  font-family: var(--font-display);
+  font-size: 23px;
+  font-weight: 600;
+  letter-spacing: -.015em;
+  line-height: 1.1;
+  border: 1px solid transparent;
+  padding: 2px 4px;
+  margin-left: -4px;
+  min-width: 40px;
+  background: transparent;
+}
+.brand__title[contenteditable="true"] { border-color: var(--rule); border-style: dashed; cursor: text; }
+.brand__sub { font-size: 12px; color: var(--ink-3); }
+
+.bar__spacer { flex: 1 1 40px; }
+.bar__tools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+.search {
+  display: flex; align-items: center; gap: 7px;
+  border: 1px solid var(--rule);
+  padding: 6px 10px;
+  background: var(--stock-card);
+}
+.search input {
+  border: 0; background: none; outline: none;
+  font-family: var(--font-mono); font-size: 12px;
+  width: 148px;
+}
+.search input::placeholder { color: var(--ink-3); }
+.search svg { flex: none; color: var(--ink-3); }
+
+.sep { width: 1px; height: 22px; background: var(--rule); }
+
+/* ─────────────────────────────────────────────────────────────
+   Status strip (draft banner + tag filters)
+   ───────────────────────────────────────────────────────────── */
+.strip {
+  display: flex; align-items: center; gap: 12px;
+  padding: 0 20px;
+  min-height: 0;
+  border-top: 1px solid var(--rule-soft);
+  flex-wrap: wrap;
+}
+.strip:not(:empty) { padding-block: 9px; }
+
+.note {
+  display: flex; align-items: center; gap: 10px;
+  font-family: var(--font-mono); font-size: 11px;
+  color: var(--ink-2);
+}
+.note::before {
+  content: ""; width: 6px; height: 6px; flex: none;
+  background: var(--hot);
+}
+.note--calm::before { background: var(--blue); }
+.note__act {
+  font-family: var(--font-mono); font-size: 11px;
+  text-decoration: underline; text-underline-offset: 3px;
+  color: var(--blue);
+}
+.note__act:hover { color: var(--hot); }
+
+.tags { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.tagbtn {
+  font-family: var(--font-mono); font-size: 10.5px;
+  letter-spacing: .06em;
+  padding: 3px 8px;
+  border: 1px solid var(--rule);
+  color: var(--ink-2);
+}
+.tagbtn:hover { border-color: var(--ink-3); color: var(--ink); }
+.tagbtn[aria-pressed="true"] { background: var(--blue); border-color: var(--blue); color: var(--on-ink); }
+
+/* ─────────────────────────────────────────────────────────────
+   Board rail
+   ───────────────────────────────────────────────────────────── */
+.board {
+  position: relative;
+  flex: 1 0 auto;
+  /* Height follows the tallest lane — the page scrolls, lanes never do. */
+  overflow-x: auto;
+  background: var(--stock);
+}
+.board::before {
+  content: "";
+  position: absolute; inset: 0;
+  background-image: radial-gradient(var(--dot) 1px, transparent 1.3px);
+  background-size: 15px 15px;
+  pointer-events: none;
+  opacity: .55;
+}
+.rail {
+  position: relative;
+  display: flex;
+  gap: var(--rail-gap);
+  align-items: stretch;
+  padding: 18px 20px 20px;
+  min-width: min-content;
+}
+
+.lane {
+  flex: 1 1 var(--lane-w);
+  min-width: 232px;
+  max-width: 420px;
+  display: flex;
+  flex-direction: column;
+  background: var(--stock-well);
+  border: 1px solid var(--rule-soft);
+}
+.lane.is-target { border-color: var(--hot); }
+
+.lane__head {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 11px 9px;
+  border-bottom: 1px solid var(--rule-soft);
+  position: relative;
+}
+.lane__head::before {
+  content: ""; position: absolute; top: 0; left: 0; right: 0;
+  height: 3px; background: var(--accent, var(--ink-3));
+}
+.lane[data-tone="blue"]  { --accent: var(--blue); }
+.lane[data-tone="hot"]   { --accent: var(--hot); }
+.lane[data-tone="grey"]  { --accent: var(--ink-3); }
+
+.lane__name {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--ink);
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 1px solid transparent;
+  padding: 1px 3px; margin-left: -3px;
+  overflow-wrap: anywhere;
+}
+.lane__name[contenteditable="true"]:hover,
+.lane__name[contenteditable="true"]:focus { border-color: var(--rule); border-style: dashed; }
+
+.lane__count {
+  font-family: var(--font-mono); font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-3);
+  padding: 2px 6px;
+  border: 1px solid transparent;
+  flex: none;
+}
+
+.lane__menu {
+  flex: none; width: 22px; height: 22px;
+  display: grid; place-items: center;
+  color: var(--ink-3);
+}
+.lane__menu:hover { color: var(--ink); }
+
+.lane__well {
+  flex: 1 1 auto;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Cards
+   ───────────────────────────────────────────────────────────── */
+.card {
+  position: relative;
+  background: var(--stock-card);
+  border: 1px solid var(--rule-soft);
+  border-left: 3px solid var(--accent, var(--ink-3));
+  padding: 10px 11px 9px 12px;
+  box-shadow: var(--shadow);
+  display: flex; flex-direction: column; gap: 6px;
+}
+.is-edit .card { cursor: grab; touch-action: none; }
+.is-edit .card:active { cursor: grabbing; }
+.card:hover { border-color: var(--rule); }
+.card.is-lifted { display: none; }
+
+/* The cursor. Selection is the keyboard's position on the board — it has to
+   read at a glance from across the rail, so it gets the hot ink. */
+.card.is-selected {
+  border-color: var(--hot);
+  box-shadow: 0 0 0 2px var(--hot), var(--shadow);
+}
+.card.is-selected::after {
+  content: "";
+  position: absolute; top: -1px; right: -1px;
+  width: 7px; height: 7px;
+  background: var(--hot);
+}
+.card.is-selected:focus-visible { outline: none; }
+
+/* Held work recedes rather than shouts — it isn't yours to act on, so it
+   shouldn't compete with the cards that are. The hatch does the identifying. */
+.card.is-blocked {
+  border-left-color: transparent;
+  background: color-mix(in srgb, var(--stock-card) 82%, var(--stock-well));
+}
+.card.is-blocked::before {
+  content: "";
+  position: absolute; left: -3px; top: -1px; bottom: -1px; width: 3px;
+  background: repeating-linear-gradient(
+    135deg, var(--ink-3) 0 2px, transparent 2px 5px);
+}
+.card.is-blocked .card__title { color: var(--ink-2); }
+
+.card__hold {
+  display: flex; align-items: baseline; gap: 7px;
+  font-family: var(--font-mono); font-size: 10.5px;
+  line-height: 1.4;
+  color: var(--ink-2);
+  padding: 5px 7px;
+  border-left: 2px solid var(--ink-3);
+  background: color-mix(in srgb, var(--ink-3) 13%, transparent);
+  overflow-wrap: anywhere;
+}
+.card__hold b {
+  flex: none;
+  font-size: 9.5px; font-weight: 600;
+  letter-spacing: .1em; text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.card__steps {
+  display: flex; flex-direction: column; gap: 1px;
+  font-family: var(--font-mono); font-size: 10.5px;
+  line-height: 1.5;
+}
+.step {
+  display: flex; align-items: baseline; gap: 6px;
+  color: var(--ink-2);
+  padding: 1px 4px; margin-left: -4px;
+  overflow-wrap: anywhere;
+}
+.step__box { flex: none; color: var(--ink-3); }
+.step.is-done { color: var(--ink-3); }
+.step.is-done .step__text { text-decoration: line-through; text-decoration-color: var(--rule); }
+.step.is-done .step__box { color: var(--blue); }
+
+/* The sub-cursor, one level down from the card cursor. */
+.step.is-active { background: var(--hot); color: var(--on-ink); }
+.step.is-active .step__box,
+.step.is-active .step__text { color: var(--on-ink); }
+.step.is-active .step__text { text-decoration-color: color-mix(in srgb, var(--on-ink) 55%, transparent); }
+.card.is-stepping { box-shadow: 0 0 0 2px var(--hot), var(--shadow); }
+.step__input {
+  flex: 1 1 auto; min-width: 0;
+  font-family: var(--font-mono); font-size: 10.5px;
+  padding: 0 3px;
+  border: 0; border-bottom: 1px solid var(--hot);
+  background: transparent; color: var(--ink);
+  outline: none;
+}
+.card__tally {
+  font-family: var(--font-mono); font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-3);
+}
+.card__tally.is-full { color: var(--blue); }
+
+/* Checklist editor in the drawer */
+.steps-edit { display: flex; flex-direction: column; gap: 5px; }
+.steps-edit__row { display: flex; align-items: center; gap: 7px; }
+.steps-edit__row input[type="text"] { flex: 1 1 auto; padding: 6px 8px; font-size: 13px; }
+.steps-edit__row input[type="checkbox"] { flex: none; width: 15px; height: 15px; accent-color: var(--blue); }
+.steps-edit__kill {
+  flex: none; width: 22px; height: 22px;
+  display: grid; place-items: center;
+  color: var(--ink-3); font-family: var(--font-mono); font-size: 14px;
+}
+.steps-edit__kill:hover { color: var(--hot); }
+
+.card__title {
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.28;
+  letter-spacing: -.005em;
+  text-wrap: pretty;
+  overflow-wrap: anywhere;
+}
+.card__note {
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--ink-2);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+.card__meta {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  margin-top: 1px;
+}
+.chip {
+  font-family: var(--font-mono); font-size: 10px;
+  letter-spacing: .07em;
+  padding: 2px 6px;
+  background: var(--blue-w);
+  color: var(--blue);
+}
+.card__link {
+  font-family: var(--font-mono); font-size: 10.5px;
+  color: var(--ink-3);
+  text-decoration: none;
+  display: inline-flex; align-items: center; gap: 3px;
+  max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.card__link:hover { color: var(--hot); text-decoration: underline; text-underline-offset: 2px; }
+.card__time {
+  font-family: var(--font-mono); font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-3);
+  margin-left: auto;
+}
+
+.slot {
+  border: 1px dashed var(--hot);
+  background: var(--hot-w);
+  flex: none;
+}
+.drag-ghost {
+  position: fixed; top: 0; left: 0;
+  z-index: 90;
+  pointer-events: none;
+  box-shadow: var(--shadow-lift);
+  transform-origin: 20% 50%;
+}
+
+.lane__add {
+  font-family: var(--font-mono); font-size: 11px;
+  letter-spacing: .07em;
+  color: var(--ink-3);
+  border: 1px dashed var(--rule);
+  padding: 8px;
+  text-align: center;
+  flex: none;
+}
+.lane__add:hover { color: var(--blue); border-color: var(--blue); }
+
+.lane-add {
+  width: 168px; flex: 0 0 168px;
+  border: 1px dashed var(--rule);
+  color: var(--ink-3);
+  font-family: var(--font-mono); font-size: 11px;
+  letter-spacing: .08em; text-transform: uppercase;
+  align-self: stretch;
+}
+.lane-add:hover { color: var(--blue); border-color: var(--blue); }
+
+.empty {
+  font-family: var(--font-mono); font-size: 11px;
+  color: var(--ink-3);
+  text-align: center;
+  padding: 22px 8px;
+  line-height: 1.6;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Drawer — card editor
+   ───────────────────────────────────────────────────────────── */
+.scrim {
+  position: fixed; inset: 0; z-index: 70;
+  background: rgba(12,14,18,.45);
+  backdrop-filter: blur(1.5px);
+}
+.drawer {
+  position: fixed; z-index: 80;
+  top: 0; right: 0; bottom: 0;
+  width: min(420px, 100%);
+  background: var(--stock-bar);
+  border-left: 1px solid var(--rule);
+  display: flex; flex-direction: column;
+  box-shadow: var(--shadow-lift);
+  animation: slide .18s ease-out;
+}
+@keyframes slide { from { transform: translateX(14px); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .drawer { animation: none; } }
+
+.drawer__head {
+  display: flex; align-items: center; gap: 10px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--rule);
+}
+.drawer__body {
+  flex: 1 1 auto; overflow-y: auto;
+  padding: 18px;
+  display: flex; flex-direction: column; gap: 16px;
+}
+.drawer__foot {
+  padding: 12px 18px;
+  border-top: 1px solid var(--rule);
+  display: flex; align-items: center; gap: 10px;
+}
+
+.field { display: flex; flex-direction: column; gap: 6px; }
+.field input, .field textarea, .field select {
+  border: 1px solid var(--rule);
+  background: var(--stock-card);
+  padding: 9px 10px;
+  font-size: 13.5px;
+  outline: none;
+  width: 100%;
+}
+.field input:focus, .field textarea:focus, .field select:focus { border-color: var(--blue); }
+.field textarea { min-height: 108px; resize: vertical; line-height: 1.5; font-family: var(--font-ui); }
+.field input.title-in { font-family: var(--font-display); font-size: 17px; font-weight: 600; }
+.field .hint { font-size: 11px; color: var(--ink-3); font-family: var(--font-mono); }
+
+/* ─────────────────────────────────────────────────────────────
+   Popover menu
+   ───────────────────────────────────────────────────────────── */
+.pop {
+  position: fixed; z-index: 85;
+  min-width: 184px;
+  background: var(--stock-card);
+  border: 1px solid var(--rule);
+  box-shadow: var(--shadow-lift);
+  padding: 4px;
+  display: flex; flex-direction: column;
+}
+.pop button {
+  text-align: left;
+  font-family: var(--font-mono); font-size: 11.5px;
+  padding: 7px 9px;
+  color: var(--ink-2);
+  display: flex; justify-content: space-between; gap: 12px;
+}
+.pop button:hover { background: var(--blue); color: var(--on-ink); }
+.pop button.is-danger:hover { background: var(--hot); }
+.pop hr { border: 0; border-top: 1px solid var(--rule-soft); margin: 4px 2px; }
+.pop kbd {
+  font-family: var(--font-mono); font-size: 10px;
+  opacity: .6;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Footer / deploy notes
+   ───────────────────────────────────────────────────────────── */
+.foot {
+  border-top: 1px solid var(--rule);
+  background: var(--stock-bar);
+}
+.foot__bar {
+  display: flex; align-items: center; gap: 14px;
+  padding: 9px 20px;
+  flex-wrap: wrap;
+}
+.foot__note { font-family: var(--font-mono); font-size: 10.5px; color: var(--ink-3); }
+
+/* Mode line, bottom right — vim's own idiom, borrowed intact */
+.mode {
+  display: flex; align-items: center; gap: 9px;
+  font-family: var(--font-mono); font-size: 10.5px;
+  letter-spacing: .12em;
+}
+.mode__tag {
+  padding: 3px 8px;
+  background: var(--ink); color: var(--stock);
+}
+.mode__tag.is-insert { background: var(--hot); color: var(--on-ink); }
+.mode__tag.is-read {
+  background: transparent; color: var(--ink-3);
+  border: 1px solid var(--rule); padding: 2px 7px;
+}
+.mode__buf {
+  color: var(--hot);
+  min-width: 4ch;
+  font-variant-numeric: tabular-nums;
+}
+.foot__panel {
+  border-top: 1px solid var(--rule-soft);
+  padding: 20px;
+  display: grid;
+  gap: 26px 30px;
+  grid-template-columns: repeat(auto-fit, minmax(268px, 1fr));
+}
+.foot__panel h3 {
+  font-family: var(--font-mono); font-size: 11px;
+  letter-spacing: .12em; text-transform: uppercase;
+  color: var(--ink);
+  margin-bottom: 9px;
+  padding-bottom: 7px;
+  border-bottom: 2px solid var(--blue);
+}
+.foot__panel p { font-size: 13px; line-height: 1.55; color: var(--ink-2); max-width: 62ch; }
+.foot__panel p + p { margin-top: 8px; }
+.foot__panel ol { font-size: 13px; line-height: 1.55; color: var(--ink-2); padding-left: 18px; }
+.foot__panel li + li { margin-top: 6px; }
+.foot__panel code {
+  font-family: var(--font-mono); font-size: 11.5px;
+  background: var(--stock-well); padding: 1px 4px;
+  overflow-wrap: anywhere;
+}
+.foot__panel pre {
+  font-family: var(--font-mono); font-size: 11.5px;
+  background: var(--stock-well);
+  border: 1px solid var(--rule-soft);
+  padding: 10px 11px;
+  margin-top: 9px;
+  overflow: auto;
+  /* Capped so one long sample doesn't stretch its whole grid row. */
+  max-height: 250px;
+  line-height: 1.6;
+  color: var(--ink-2);
+}
+.keys { display: grid; grid-template-columns: auto 1fr; gap: 5px 12px; font-size: 12.5px; color: var(--ink-2); }
+.keys kbd {
+  font-family: var(--font-mono); font-size: 10.5px;
+  border: 1px solid var(--rule); padding: 1px 5px;
+  background: var(--stock-well); color: var(--ink);
+  white-space: nowrap;
+}
+
+.sr {
+  position: absolute; width: 1px; height: 1px;
+  padding: 0; overflow: hidden; clip: rect(0 0 0 0);
+  white-space: nowrap; border: 0;
+}
+
+@media (max-width: 640px) {
+  .bar { gap: 10px; padding: 11px 13px; }
+  .brand__sub { display: none; }
+  .rail { padding: 13px; }
+  :root { --lane-w: 268px; }
+}
+</style>
+
+<div id="app">
+  <div class="topbar">
+  <header class="bar">
+    <div class="brand">
+      <span class="brand__mark" aria-hidden="true"></span>
+      <h1 class="brand__title" id="boardTitle" spellcheck="false">Projects</h1>
+      <span class="brand__sub mono tnum" id="boardMeta"></span>
+    </div>
+    <span class="bar__spacer"></span>
+    <div class="bar__tools">
+      <div class="search">
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <circle cx="7" cy="7" r="4.6" stroke="currentColor" stroke-width="1.5"/>
+          <path d="M10.5 10.5 L14 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+        <input id="search" type="search" placeholder="filter…" aria-label="Filter projects" autocomplete="off">
+      </div>
+      <span class="sep" aria-hidden="true"></span>
+      <button class="btn" id="editToggle" aria-pressed="false">Edit</button>
+      <button class="btn" id="exportBtn">Export</button>
+      <button class="btn" id="importBtn">Import</button>
+      <button class="btn" id="copyBtn">Copy JSON</button>
+    </div>
+  </header>
+
+  <div class="strip" id="strip"></div>
+  </div>
+
+  <main class="board" id="board">
+    <div class="rail" id="rail"></div>
+  </main>
+
+  <footer class="foot">
+    <div class="foot__bar">
+      <button class="btn" id="helpToggle" aria-expanded="false" aria-controls="helpPanel">Publishing &amp; keys</button>
+      <span class="foot__note" id="storageNote"></span>
+      <span class="bar__spacer"></span>
+      <span class="mode" id="mode">
+        <span class="mode__buf" id="modeBuf"></span>
+        <span class="mode__tag is-read" id="modeTag">READ-ONLY</span>
+      </span>
+    </div>
+    <div class="foot__panel" id="helpPanel" hidden>
+      <section>
+        <h3>How publishing works</h3>
+        <p>The board renders whatever is in <code>board.json</code> sitting next to this file. Editing here changes only your own browser's copy — anyone visiting can toggle edit too, and it never touches what you published.</p>
+        <p>The loop is: edit → <strong>Export</strong> → drop the new <code>board.json</code> next to <code>index.html</code> → deploy. Your published board is a file you own, diffable in git.</p>
+      </section>
+      <section>
+        <h3>Cloudflare Pages</h3>
+        <ol>
+          <li>Put <code>index.html</code> and <code>board.json</code> in a git repo.</li>
+          <li>Pages → Create → Connect to Git. Framework preset <em>None</em>, build command empty, output directory <code>/</code>.</li>
+          <li>Every push republishes. Or skip git entirely:</li>
+        </ol>
+        <pre>npx wrangler pages deploy . --project-name=board</pre>
+      </section>
+      <section>
+        <h3>Your own VPS</h3>
+        <p>It's two static files — any web server will do. With Caddy:</p>
+        <pre>board.example.com {
+    root * /srv/board
+    file_server
+}</pre>
+        <p>Then <code>scp index.html board.json vps:/srv/board/</code> after each export. Add <code>basicauth</code> on a <code>/edit</code> path if you ever want the write side gated.</p>
+      </section>
+      <section>
+        <h3>The JSON</h3>
+        <p>Hand-editable on purpose — lanes hold cards, ids are strings, dates are ISO 8601. Import accepts any file matching this shape.</p>
+        <pre>{
+  "schema": "kanban.v1",
+  "title": "Projects",
+  "lanes": [{
+    "id": "l1",
+    "name": "Building",
+    "tone": "hot",
+    "cards": [{
+      "id": "c1",
+      "title": "Public project board",
+      "note": "Optional detail.",
+      "tags": ["web"],
+      "link": "https://example.com",
+      "updated": "2026-07-28T09:00:00Z"
+    }]
+  }]
+}</pre>
+      </section>
+      <section>
+        <h3>Keyboard — move</h3>
+        <div class="keys">
+          <kbd>h j k l</kbd><span>Move the cursor: lane left / down / up / lane right. Arrow keys do the same.</span>
+          <kbd>g g</kbd><span>First card in the lane</span>
+          <kbd>G</kbd><span>Last card in the lane</span>
+          <kbd>0</kbd><span>Leftmost lane</span>
+          <kbd>$</kbd><span>Rightmost lane</span>
+          <kbd>3 j</kbd><span>Counts work on any motion</span>
+        </div>
+      </section>
+      <section>
+        <h3>Keyboard — change</h3>
+        <p>These need edit mode — press <kbd>e</kbd> first.</p>
+        <div class="keys">
+          <kbd>H J K L</kbd><span>Carry the card with the cursor. Shift + arrows do the same.</span>
+          <kbd>i</kbd> <span>Open the card for editing (<kbd>Enter</kbd> too)</span>
+          <kbd>o</kbd><span>New card below the cursor · <kbd>O</kbd> above</span>
+          <kbd>b</kbd><span>Mark what it's waiting on · <kbd>b</kbd> again clears it</span>
+          <kbd>Space</kbd><span>Tick the next open step on the checklist</span>
+          <kbd>d d</kbd><span>Delete the card into the register</span>
+          <kbd>y y</kbd><span>Copy the card into the register</span>
+          <kbd>p</kbd><span>Paste below the cursor · <kbd>P</kbd> above</span>
+          <kbd>A</kbd><span>Append a lane</span>
+          <kbd>u</kbd><span>Undo · <kbd>U</kbd> redo</span>
+        </div>
+      </section>
+      <section>
+        <h3>Keyboard — everything else</h3>
+        <div class="keys">
+          <kbd>e</kbd><span>Toggle edit mode</span>
+          <kbd>/</kbd><span>Filter. Motions still work on what's left.</span>
+          <kbd>?</kbd><span>This panel</span>
+          <kbd>Esc</kbd><span>Clear the count, then the filter, then the cursor. Closes any open panel first.</span>
+        </div>
+        <p>The mode line sits bottom right, and shows pending keys as you type them.</p>
+      </section>
+      <section>
+        <h3>Keyboard — checklists</h3>
+        <p><kbd>s</kbd> drops the cursor into a card's checklist; the card opens out
+        and the mode line reads <strong>STEPS</strong>. The keys mean the same things
+        one level down.</p>
+        <div class="keys">
+          <kbd>s</kbd><span>Enter the checklist. On a card without one, starts it.</span>
+          <kbd>j k</kbd><span>Walk the steps</span>
+          <kbd>Space</kbd><span>Tick or untick · <kbd>x</kbd> does the same</span>
+          <kbd>J K</kbd><span>Reorder the step</span>
+          <kbd>o</kbd><span>New step below · <kbd>O</kbd> above</span>
+          <kbd>i</kbd><span>Rename the step in place (<kbd>Enter</kbd> too)</span>
+          <kbd>d d</kbd><span>Remove the step</span>
+          <kbd>Esc</kbd><span>Back to the board · <kbd>h</kbd> and <kbd>s</kbd> too</span>
+        </div>
+        <p>Editing a step happens on the card itself — <kbd>Enter</kbd> commits,
+        <kbd>Esc</kbd> discards. Outside the checklist, <kbd>Space</kbd> still ticks
+        a card's next open step without descending into it.</p>
+      </section>
+      <section>
+        <h3>Projects, not tasks</h3>
+        <p>A card is a project; its checklist is the detail. <strong>Blocked is a
+        flag, not a lane</strong> — a held card keeps its place in the pipeline and
+        gains a <em>waiting on</em> marker, so something code-complete still reads
+        that way while it sits.</p>
+        <p>Hence the <em>actionable</em> filter: hide what's waiting on someone else
+        and what's left is yours to pick up.</p>
+      </section>
+      <section>
+        <h3>Starting clean</h3>
+        <p>Wipes everything back to three empty lanes. Your published <code>board.json</code>
+        is untouched until you export a new one and deploy it.</p>
+        <p><button class="btn is-danger" id="wipeBtn">Clear board &amp; start empty</button></p>
+      </section>
+    </div>
+  </footer>
+</div>
+
+<input type="file" id="fileInput" accept="application/json,.json" hidden>
+<div class="sr" id="announce" role="status" aria-live="polite"></div>
+
+<script>
+(() => {
+"use strict";
+
+/* ── Constants ────────────────────────────────────────────── */
+const DRAFT_KEY = "kanban.draft.v1";
+const SCHEMA = "kanban.v1";
+const TONES = ["blue", "hot", "grey"];
+
+/* ── State ────────────────────────────────────────────────── */
+let board = null;        // working copy
+let published = null;    // board.json as deployed, if reachable
+let editMode = false;
+let query = "";
+let tagFilter = null;
+let stateFilter = null;  // null | "actionable" | "blocked"
+let openId = null;       // card open in the drawer
+let dragging = false;
+let selectedId = null;   // the cursor
+let stepCursor = null;   // index into the selected card's checklist, or null
+let editingStep = false; // an inline step input is open; hold off re-rendering
+let register = null;     // yanked / deleted card, for p
+const undoStack = [];
+const redoStack = [];
+
+const $ = (sel) => document.querySelector(sel);
+const rail = $("#rail");
+const strip = $("#strip");
+const announce = $("#announce");
+
+/* ── Seed ─────────────────────────────────────────────────── */
+/* A fresh board: three lanes, nothing in them. Deploying a board.json
+   replaces this entirely — it only shows when there's nothing to read. */
+function seed() {
+  return {
+    schema: SCHEMA,
+    title: "Projects",
+    lanes: [
+      { id: "l-todo",  name: "To do", tone: "grey", cards: [] },
+      { id: "l-doing", name: "Doing", tone: "hot",  cards: [] },
+      { id: "l-done",  name: "Done",  tone: "blue", cards: [] }
+    ]
+  };
+}
+
+/* ── Helpers ──────────────────────────────────────────────── */
+let idSeq = 0;
+const uid = (p) => `${p}-${Date.now().toString(36)}${(idSeq++).toString(36)}${Math.floor(Math.random() * 1296).toString(36)}`;
+
+const nowISO = () => new Date().toISOString();
+
+function fmtDate(iso) {
+  const d = new Date(iso);
+  if (isNaN(d)) return "";
+  const sameYear = d.getFullYear() === new Date().getFullYear();
+  return d.toLocaleDateString(undefined, sameYear
+    ? { month: "short", day: "numeric" }
+    : { month: "short", day: "numeric", year: "2-digit" });
+}
+
+function safeHref(url) {
+  if (typeof url !== "string") return "";
+  const t = url.trim();
+  return /^https?:\/\//i.test(t) ? t : "";
+}
+
+function hostOf(url) {
+  try { return new URL(url).hostname.replace(/^www\./, ""); }
+  catch { return url; }
+}
+
+function say(msg) { announce.textContent = msg; }
+
+function allCards(b = board) { return b.lanes.flatMap((l) => l.cards); }
+
+function findCard(id) {
+  for (const lane of board.lanes) {
+    const i = lane.cards.findIndex((c) => c.id === id);
+    if (i > -1) return { lane, card: lane.cards[i], index: i };
+  }
+  return null;
+}
+
+/* ── Normalise anything that claims to be a board ─────────── */
+function normalize(raw) {
+  if (!raw || typeof raw !== "object") throw new Error("Not a JSON object.");
+  const lanes = Array.isArray(raw.lanes) ? raw.lanes : null;
+  if (!lanes) throw new Error("No “lanes” array. Expected " + SCHEMA + ".");
+  const seen = new Set();
+  const uniq = (id, p) => {
+    let v = typeof id === "string" && id ? id : uid(p);
+    while (seen.has(v)) v = uid(p);
+    seen.add(v);
+    return v;
+  };
+  return {
+    schema: SCHEMA,
+    title: typeof raw.title === "string" && raw.title.trim() ? raw.title.trim() : "Board",
+    updated: typeof raw.updated === "string" ? raw.updated : nowISO(),
+    lanes: lanes.map((l) => ({
+      id: uniq(l && l.id, "l"),
+      name: (l && typeof l.name === "string" && l.name.trim()) ? l.name.trim() : "Untitled lane",
+      tone: TONES.includes(l && l.tone) ? l.tone : "grey",
+      cards: (Array.isArray(l && l.cards) ? l.cards : []).map((c) => ({
+        id: uniq(c && c.id, "c"),
+        title: (c && typeof c.title === "string") ? c.title : "Untitled",
+        note: (c && typeof c.note === "string") ? c.note : "",
+        tags: Array.isArray(c && c.tags) ? c.tags.filter((t) => typeof t === "string" && t.trim()).map((t) => t.trim()) : [],
+        link: (c && typeof c.link === "string") ? c.link : "",
+        // A step may be written as a bare string when hand-editing.
+        steps: (Array.isArray(c && c.steps) ? c.steps : [])
+          .map((st) => (typeof st === "string"
+            ? { text: st.trim(), done: false }
+            : { text: (st && typeof st.text === "string") ? st.text.trim() : "",
+                done: Boolean(st && st.done) }))
+          .filter((st) => st.text),
+        blockedOn: (c && typeof c.blockedOn === "string") ? c.blockedOn.trim() : "",
+        created: (c && typeof c.created === "string") ? c.created : nowISO(),
+        updated: (c && typeof c.updated === "string") ? c.updated : nowISO()
+      }))
+    }))
+  };
+}
+
+function exportable(b) {
+  return {
+    schema: SCHEMA,
+    title: b.title,
+    updated: nowISO(),
+    lanes: b.lanes.map((l) => ({
+      id: l.id, name: l.name, tone: l.tone,
+      cards: l.cards.map((c) => ({
+        id: c.id, title: c.title, note: c.note, tags: c.tags,
+        link: c.link, steps: c.steps, blockedOn: c.blockedOn,
+        created: c.created, updated: c.updated
+      }))
+    }))
+  };
+}
+
+/* ── Storage ──────────────────────────────────────────────── */
+let storageOK = true;
+function saveDraft() {
+  if (!storageOK) return;
+  try {
+    localStorage.setItem(DRAFT_KEY, JSON.stringify({ base: draftBase, board }));
+  } catch {
+    storageOK = false;
+    $("#storageNote").textContent = "Local storage unavailable — export before you close this tab.";
+  }
+}
+function loadDraft() {
+  try {
+    const raw = localStorage.getItem(DRAFT_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return { base: parsed.base ?? null, board: normalize(parsed.board) };
+  } catch { return null; }
+}
+function clearDraft() { try { localStorage.removeItem(DRAFT_KEY); } catch {} }
+
+let hasDraft = false;
+function touch() {
+  board.updated = nowISO();
+  hasDraft = true;
+  saveDraft();
+}
+
+/* ── Undo ─────────────────────────────────────────────────── */
+const snapshot = () => JSON.stringify({ board, selectedId });
+
+function checkpoint() {
+  undoStack.push(snapshot());
+  if (undoStack.length > 60) undoStack.shift();
+  redoStack.length = 0;
+}
+
+function restore(json) {
+  const s = JSON.parse(json);
+  board = s.board;
+  selectedId = s.selectedId;
+  touch(); render();
+}
+
+function undo() {
+  if (!undoStack.length) return say("Nothing to undo.");
+  redoStack.push(snapshot());
+  restore(undoStack.pop());
+  say("Undone.");
+}
+
+function redo() {
+  if (!redoStack.length) return say("Nothing to redo.");
+  undoStack.push(snapshot());
+  restore(redoStack.pop());
+  say("Redone.");
+}
+
+/* ── Filtering ────────────────────────────────────────────── */
+const filtering = () => Boolean(query || tagFilter || stateFilter);
+
+const isBlocked = (card) => Boolean(card.blockedOn);
+
+function matches(card) {
+  if (tagFilter && !card.tags.includes(tagFilter)) return false;
+  if (stateFilter === "actionable" && isBlocked(card)) return false;
+  if (stateFilter === "blocked" && !isBlocked(card)) return false;
+  if (!query) return true;
+  const q = query.toLowerCase();
+  return card.title.toLowerCase().includes(q)
+    || card.note.toLowerCase().includes(q)
+    || card.blockedOn.toLowerCase().includes(q)
+    || card.steps.some((st) => st.text.toLowerCase().includes(q))
+    || card.tags.some((t) => t.toLowerCase().includes(q));
+}
+
+/* Motions run over what's on screen, so a filter narrows the board the keyboard
+   sees rather than putting it out of reach. */
+const visible = (lane) => lane.cards.filter(matches);
+
+/* Where the cursor sits, in visible coordinates. */
+function cursor() {
+  if (!selectedId) return null;
+  for (let li = 0; li < board.lanes.length; li++) {
+    const vis = visible(board.lanes[li]);
+    const ci = vis.findIndex((c) => c.id === selectedId);
+    if (ci > -1) return { li, ci, lane: board.lanes[li], card: vis[ci], vis };
+  }
+  return null;
+}
+
+/* Translate a visible position in a lane back to an index in the real array. */
+function realIndex(lane, ordinal) {
+  const vis = visible(lane);
+  if (!vis.length) return lane.cards.length;
+  if (ordinal >= vis.length) return lane.cards.indexOf(vis[vis.length - 1]) + 1;
+  return lane.cards.indexOf(vis[Math.max(0, ordinal)]);
+}
+
+function select(id) {
+  if (id !== selectedId) stepCursor = null;
+  selectedId = id;
+  paintCursor();
+}
+
+function paintCursor() {
+  for (const el of rail.querySelectorAll(".card")) {
+    const on = el.dataset.id === selectedId;
+    el.classList.toggle("is-selected", on);
+    if (on) {
+      el.scrollIntoView({ block: "nearest", inline: "nearest" });
+      const active = document.activeElement;
+      if (!active || active === document.body || active.classList.contains("card")) el.focus();
+    }
+  }
+  paintMode();
+}
+
+function paintMode() {
+  const tag = $("#modeTag");
+  const stepping = stepCursor !== null;
+  tag.classList.toggle("is-read", !editMode);
+  tag.classList.toggle("is-insert", Boolean(openId) || stepping);
+  tag.textContent = openId ? "INSERT" : stepping ? "STEPS" : editMode ? "NORMAL" : "READ-ONLY";
+  $("#modeBuf").textContent = count + pending;
+}
+
+/* ── Render ───────────────────────────────────────────────── */
+function render() {
+  if (dragging || editingStep) return;
+  document.body.classList.toggle("is-edit", editMode);
+  $("#boardTitle").textContent = board.title;
+  $("#boardTitle").contentEditable = editMode ? "true" : "false";
+
+  const total = allCards().length;
+  $("#boardMeta").textContent =
+    `${total} project${total === 1 ? "" : "s"} · updated ${fmtDate(board.updated || nowISO())}`;
+  document.title = board.title ? `${board.title} — DEN` : "DEN";
+
+  renderStrip();
+  renderRail();
+  paintCursor();
+}
+
+function renderStrip() {
+  strip.replaceChildren();
+
+  if (hasDraft) {
+    const stale = published && published.updated && draftBase !== published.updated;
+    const n = document.createElement("div");
+    n.className = "note" + (stale ? "" : " note--calm");
+    n.append(document.createTextNode(
+      stale
+        ? "The deployed board changed after you started editing."
+        : `Unpublished draft · last edit ${fmtDate(board.updated)}`
+    ));
+    const act = (label, fn) => {
+      const b = document.createElement("button");
+      b.className = "note__act"; b.textContent = label;
+      b.addEventListener("click", fn);
+      n.append(b);
+      return b;
+    };
+    act("Export", doExport);
+    act(stale ? "Load deployed version" : "Discard draft", () => {
+      const what = published ? "the deployed board" : "the starting board";
+      if (!confirm(`Discard your local edits and reload ${what}?`)) return;
+      clearDraft(); hasDraft = false;
+      board = normalize(published || seed());
+      draftBase = published ? published.updated : null;
+      render(); say(published ? "Deployed board reloaded." : "Draft discarded.");
+    });
+    strip.append(n);
+  }
+
+  const held = allCards().filter(isBlocked).length;
+  if (held || stateFilter) {
+    const wrap = document.createElement("div");
+    wrap.className = "tags";
+    const lab = document.createElement("span");
+    lab.className = "label";
+    lab.textContent = "Show";
+    wrap.append(lab);
+    const chip = (key, label) => {
+      const b = document.createElement("button");
+      b.className = "tagbtn";
+      b.textContent = label;
+      b.setAttribute("aria-pressed", String(stateFilter === key));
+      b.addEventListener("click", () => {
+        stateFilter = stateFilter === key ? null : key;
+        render();
+        say(stateFilter === "actionable" ? "Showing what you can act on."
+          : stateFilter === "blocked" ? "Showing held work only."
+          : "Showing everything.");
+      });
+      wrap.append(b);
+    };
+    chip("actionable", "actionable");
+    chip("blocked", `held · ${held}`);
+    strip.append(wrap);
+  }
+
+  const tags = [...new Set(allCards().flatMap((c) => c.tags))].sort();
+  if (tags.length) {
+    const wrap = document.createElement("div");
+    wrap.className = "tags";
+    const lab = document.createElement("span");
+    lab.className = "label"; lab.textContent = "Tags";
+    wrap.append(lab);
+    for (const t of tags) {
+      const b = document.createElement("button");
+      b.className = "tagbtn"; b.textContent = t;
+      b.setAttribute("aria-pressed", String(tagFilter === t));
+      b.addEventListener("click", () => {
+        tagFilter = tagFilter === t ? null : t;
+        render();
+        say(tagFilter ? `Filtered to ${t}.` : "Tag filter cleared.");
+      });
+      wrap.append(b);
+    }
+    strip.append(wrap);
+  }
+}
+
+function renderRail() {
+  const keepScroll = rail.parentElement.scrollLeft;
+  rail.replaceChildren();
+
+  for (const lane of board.lanes) rail.append(laneEl(lane));
+
+  if (editMode) {
+    const add = document.createElement("button");
+    add.className = "lane-add";
+    add.textContent = "+ Lane";
+    add.addEventListener("click", () => {
+      checkpoint();
+      board.lanes.push({ id: uid("l"), name: "New lane", tone: "grey", cards: [] });
+      touch(); render(); say("Lane added.");
+    });
+    rail.append(add);
+  }
+  rail.parentElement.scrollLeft = keepScroll;
+}
+
+function laneEl(lane) {
+  const shown = lane.cards.filter(matches);
+
+  const el = document.createElement("section");
+  el.className = "lane";
+  el.dataset.id = lane.id;
+  el.dataset.tone = lane.tone;
+
+  const head = document.createElement("header");
+  head.className = "lane__head";
+
+  const name = document.createElement("h2");
+  name.className = "lane__name";
+  name.textContent = lane.name;
+  if (editMode) {
+    name.contentEditable = "true";
+    name.spellcheck = false;
+    name.addEventListener("blur", () => {
+      const v = name.textContent.trim();
+      if ((v || "Untitled lane") === lane.name) return;
+      checkpoint();
+      lane.name = v || "Untitled lane";
+      name.textContent = lane.name;
+      touch();
+    });
+    name.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); name.blur(); }
+      if (e.key === "Escape") { name.textContent = lane.name; name.blur(); }
+    });
+  }
+
+  const count = document.createElement("span");
+  count.className = "lane__count tnum";
+  count.textContent = filtering() ? `${shown.length}/${lane.cards.length}` : String(lane.cards.length);
+
+  head.append(name, count);
+
+  if (editMode) {
+    const menu = document.createElement("button");
+    menu.className = "lane__menu";
+    menu.setAttribute("aria-label", `Options for ${lane.name}`);
+    menu.innerHTML = '<svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><circle cx="3" cy="8" r="1.4" fill="currentColor"/><circle cx="8" cy="8" r="1.4" fill="currentColor"/><circle cx="13" cy="8" r="1.4" fill="currentColor"/></svg>';
+    menu.addEventListener("click", (e) => { e.stopPropagation(); laneMenu(lane, menu); });
+    head.append(menu);
+  }
+
+  const well = document.createElement("div");
+  well.className = "lane__well";
+  well.dataset.id = lane.id;
+
+  if (!shown.length) {
+    const e = document.createElement("p");
+    e.className = "empty";
+    e.textContent = lane.cards.length ? "Nothing matches the filter." : "Empty";
+    well.append(e);
+  } else {
+    for (const c of shown) well.append(cardEl(c, lane));
+  }
+
+  if (editMode && !filtering()) {
+    const add = document.createElement("button");
+    add.className = "lane__add";
+    add.textContent = "+ Project";
+    add.addEventListener("click", () => addCard(lane));
+    well.append(add);
+  }
+
+  el.append(head, well);
+  return el;
+}
+
+function cardEl(card, lane) {
+  const el = document.createElement("article");
+  el.className = "card";
+  el.dataset.id = card.id;
+  el.tabIndex = 0;
+  el.style.setProperty("--accent", `var(--${lane.tone === "hot" ? "hot" : lane.tone === "blue" ? "blue" : "ink-3"})`);
+
+  if (isBlocked(card)) el.classList.add("is-blocked");
+
+  const h = document.createElement("h3");
+  h.className = "card__title";
+  h.textContent = card.title || "Untitled";
+  el.append(h);
+
+  if (isBlocked(card)) {
+    const hold = document.createElement("p");
+    hold.className = "card__hold";
+    const tag = document.createElement("b");
+    tag.textContent = "Waiting on";
+    hold.append(tag, document.createTextNode(card.blockedOn));
+    el.append(hold);
+  }
+
+  if (card.note) {
+    const p = document.createElement("p");
+    p.className = "card__note";
+    p.textContent = card.note;
+    el.append(p);
+  }
+
+  const stepping = stepCursor !== null && card.id === selectedId;
+  if (stepping) el.classList.add("is-stepping");
+
+  if (card.steps.length) {
+    const list = document.createElement("div");
+    list.className = "card__steps";
+    // Collapsed to five on a resting card; opened out while the cursor is in it.
+    const shown = stepping ? card.steps.length : Math.min(card.steps.length, 5);
+    for (let i = 0; i < shown; i++) {
+      const st = card.steps[i];
+      const item = document.createElement("span");
+      item.className = "step" + (st.done ? " is-done" : "")
+        + (stepping && i === stepCursor ? " is-active" : "");
+      item.dataset.i = String(i);
+      const box = document.createElement("span");
+      box.className = "step__box";
+      box.textContent = st.done ? "✓" : "☐";
+      const txt = document.createElement("span");
+      txt.className = "step__text";
+      txt.textContent = st.text;
+      item.append(box, txt);
+      list.append(item);
+    }
+    if (shown < card.steps.length) {
+      const more = document.createElement("span");
+      more.className = "step";
+      more.textContent = `+${card.steps.length - shown} more`;
+      list.append(more);
+    }
+    el.append(list);
+  }
+
+  const href = safeHref(card.link);
+  if (card.tags.length || href || card.updated || card.steps.length) {
+    const meta = document.createElement("div");
+    meta.className = "card__meta";
+    if (card.steps.length) {
+      const done = card.steps.filter((st) => st.done).length;
+      const tally = document.createElement("span");
+      tally.className = "card__tally" + (done === card.steps.length ? " is-full" : "");
+      tally.textContent = `${done}/${card.steps.length}`;
+      meta.append(tally);
+    }
+    for (const t of card.tags.slice(0, 4)) {
+      const c = document.createElement("span");
+      c.className = "chip"; c.textContent = t;
+      meta.append(c);
+    }
+    if (href) {
+      const a = document.createElement("a");
+      a.className = "card__link";
+      a.href = href; a.target = "_blank"; a.rel = "noopener noreferrer";
+      a.textContent = hostOf(href) + " ↗";
+      meta.append(a);
+    }
+    if (card.updated) {
+      const t = document.createElement("time");
+      t.className = "card__time";
+      t.dateTime = card.updated;
+      t.textContent = fmtDate(card.updated);
+      meta.append(t);
+    }
+    el.append(meta);
+  }
+
+  el.addEventListener("pointerdown", onPointerDown);
+  el.addEventListener("focus", () => select(card.id));
+  el.addEventListener("dblclick", () => editMode && openCard(card.id));
+  el.addEventListener("click", (e) => {
+    if (e.target.closest("a")) return;
+    select(card.id);
+    if (editMode && !justDragged) openCard(card.id);
+  });
+  return el;
+}
+
+/* ── Card mutations ───────────────────────────────────────── */
+function addCard(lane, at = lane.cards.length) {
+  checkpoint();
+  const card = {
+    id: uid("c"), title: "", note: "", tags: [], link: "",
+    steps: [], blockedOn: "",
+    created: nowISO(), updated: nowISO()
+  };
+  lane.cards.splice(at, 0, card);
+  selectedId = card.id;
+  touch(); render();
+  openCard(card.id, true);
+}
+
+function moveCard(id, toLaneId, toIndex) {
+  const found = findCard(id);
+  const dest = board.lanes.find((l) => l.id === toLaneId);
+  if (!found || !dest) return;
+  found.lane.cards.splice(found.index, 1);
+  dest.cards.splice(Math.max(0, Math.min(toIndex, dest.cards.length)), 0, found.card);
+  found.card.updated = nowISO();
+  touch();
+}
+
+/* ── Pointer drag ─────────────────────────────────────────── */
+let drag = null;
+let justDragged = false;
+
+function onPointerDown(e) {
+  if (!editMode || filtering()) return;
+  if (e.button !== 0 || e.target.closest("a, button, input, textarea")) return;
+  const el = e.currentTarget;
+  drag = {
+    el, id: el.dataset.id, pid: e.pointerId,
+    x0: e.clientX, y0: e.clientY, live: false,
+    ghost: null, slot: null, rect: el.getBoundingClientRect()
+  };
+  window.addEventListener("pointermove", onPointerMove);
+  window.addEventListener("pointerup", onPointerUp);
+  window.addEventListener("pointercancel", onPointerUp);
+}
+
+function onPointerMove(e) {
+  if (!drag || e.pointerId !== drag.pid) return;
+  const dx = e.clientX - drag.x0, dy = e.clientY - drag.y0;
+
+  if (!drag.live) {
+    if (Math.hypot(dx, dy) < 5) return;
+    drag.live = true;
+    dragging = true;
+    try { drag.el.setPointerCapture(drag.pid); } catch {}
+
+    const ghost = drag.el.cloneNode(true);
+    ghost.classList.add("drag-ghost");
+    ghost.style.width = `${drag.rect.width}px`;
+    document.body.append(ghost);
+    drag.ghost = ghost;
+
+    const slot = document.createElement("div");
+    slot.className = "slot";
+    slot.style.height = `${drag.rect.height}px`;
+    drag.el.after(slot);
+    drag.slot = slot;
+    drag.el.classList.add("is-lifted");
+    say("Lifted. Move to a lane and release.");
+  }
+
+  const gx = drag.rect.left + dx, gy = drag.rect.top + dy;
+  drag.ghost.style.transform = `translate3d(${gx}px, ${gy}px, 0) rotate(-1.1deg) scale(1.015)`;
+
+  placeSlot(e.clientX, e.clientY);
+  autoScroll(e.clientX, e.clientY);
+  e.preventDefault();
+}
+
+function placeSlot(x, y) {
+  const well = document.elementsFromPoint(x, y)
+    .find((el) => el.classList && el.classList.contains("lane__well"));
+
+  for (const l of rail.querySelectorAll(".lane")) l.classList.remove("is-target");
+  if (!well) return;
+  well.closest(".lane").classList.add("is-target");
+
+  const empty = well.querySelector(".empty");
+  if (empty) empty.remove();
+
+  const cards = [...well.querySelectorAll(":scope > .card")].filter((c) => c !== drag.el);
+  let before = null;
+  for (const c of cards) {
+    const r = c.getBoundingClientRect();
+    if (y < r.top + r.height / 2) { before = c; break; }
+  }
+  if (before) well.insertBefore(drag.slot, before);
+  else well.insertBefore(drag.slot, well.querySelector(".lane__add"));
+}
+
+function autoScroll(x, y) {
+  const view = rail.parentElement;
+  const r = view.getBoundingClientRect();
+  const edge = 70;
+  if (x < r.left + edge) view.scrollLeft -= 14;
+  else if (x > r.right - edge) view.scrollLeft += 14;
+
+  if (y < 90) scrollBy(0, -14);
+  else if (y > innerHeight - 60) scrollBy(0, 14);
+}
+
+function onPointerUp(e) {
+  window.removeEventListener("pointermove", onPointerMove);
+  window.removeEventListener("pointerup", onPointerUp);
+  window.removeEventListener("pointercancel", onPointerUp);
+  if (!drag) return;
+
+  if (drag.live) {
+    const well = drag.slot.closest(".lane__well");
+    const laneId = well.dataset.id;
+    // The lifted card is still a child (display:none) — excluding it keeps the
+    // slot's DOM index aligned with the array index after the source splice.
+    const sibs = [...well.children]
+      .filter((c) => (c.classList.contains("card") && c !== drag.el) || c === drag.slot);
+    const index = sibs.indexOf(drag.slot);
+
+    drag.ghost.remove();
+    drag.slot.remove();
+    drag.el.classList.remove("is-lifted");
+    dragging = false;
+
+    checkpoint();
+    moveCard(drag.id, laneId, index);
+    const lane = board.lanes.find((l) => l.id === laneId);
+    justDragged = true;
+    setTimeout(() => { justDragged = false; }, 0);
+    render();
+    say(`Moved to ${lane.name}, position ${index + 1}.`);
+  }
+  drag = null;
+}
+
+/* ── Normal mode ──────────────────────────────────────────────
+   A vim keymap over the board: hjkl walks the cursor, shifted keys carry the
+   card with it, counts prefix any motion, and dd/yy/p use a single register.
+   Nothing here uses a modifier the browser has already claimed.
+   ─────────────────────────────────────────────────────────── */
+let pending = "";   // partial sequence: "d", "y", "g"
+let count = "";     // numeric prefix
+let pendingTimer = null;
+
+function clearPending() {
+  pending = "";
+  count = "";
+  clearTimeout(pendingTimer);
+  paintMode();
+}
+
+function armPending(key) {
+  pending = key;
+  paintMode();
+  clearTimeout(pendingTimer);
+  pendingTimer = setTimeout(clearPending, 1400);
+}
+
+/* Motions land somewhere even from a standing start. The first keypress just
+   places the cursor — it doesn't also move it. */
+function ensureCursor() {
+  const existing = cursor();
+  if (existing) return { c: existing, placed: false };
+  for (const lane of board.lanes) {
+    const vis = visible(lane);
+    if (vis.length) { select(vis[0].id); return { c: cursor(), placed: true }; }
+  }
+  return { c: null, placed: false };
+}
+
+function needEdit() {
+  if (editMode) return true;
+  say("Read-only. Press e to edit.");
+  flashMode();
+  return false;
+}
+
+let flashTimer = null;
+function flashMode() {
+  const tag = $("#modeTag");
+  tag.style.background = "var(--hot)";
+  tag.style.color = "var(--on-ink)";
+  clearTimeout(flashTimer);
+  flashTimer = setTimeout(() => { tag.style.background = ""; tag.style.color = ""; }, 450);
+}
+
+/* Cursor motions — n repetitions, clamped at the edges. */
+function motion(dir, n) {
+  const { c, placed } = ensureCursor();
+  if (!c || placed) return;
+  let { li, ci } = c;
+
+  if (dir === "j" || dir === "k") {
+    ci = Math.max(0, Math.min(c.vis.length - 1, ci + (dir === "j" ? n : -n)));
+    select(c.vis[ci].id);
+    return;
+  }
+  // Sideways: keep the same depth in the new lane, and skip empty lanes so a
+  // filtered board doesn't strand the cursor.
+  const step = dir === "l" ? 1 : -1;
+  let target = li;
+  for (let moved = 0; moved < n; ) {
+    target += step;
+    if (target < 0 || target >= board.lanes.length) { target -= step; break; }
+    if (visible(board.lanes[target]).length) moved++;
+  }
+  const vis = visible(board.lanes[target]);
+  if (!vis.length) return;
+  select(vis[Math.min(ci, vis.length - 1)].id);
+}
+
+/* Shifted motions — the card travels with the cursor. */
+function carry(dir, n) {
+  if (!needEdit()) return;
+  const { c, placed } = ensureCursor();
+  if (!c || placed) return;
+  checkpoint();
+
+  if (dir === "J" || dir === "K") {
+    const to = Math.max(0, Math.min(c.vis.length - 1, c.ci + (dir === "J" ? n : -n)));
+    if (to === c.ci) return;
+    // Aim at the visible neighbour's real slot, which collapses to ±1 unfiltered.
+    const anchor = c.lane.cards.indexOf(c.vis[to]);
+    moveCard(c.card.id, c.lane.id, anchor);
+    render();
+    say(`Position ${to + 1} in ${c.lane.name}.`);
+    return;
+  }
+
+  const step = dir === "L" ? 1 : -1;
+  let target = c.li;
+  for (let moved = 0; moved < n; moved++) {
+    const next = target + step;
+    if (next < 0 || next >= board.lanes.length) break;
+    target = next;
+  }
+  if (target === c.li) return;
+  const dest = board.lanes[target];
+  moveCard(c.card.id, dest.id, realIndex(dest, c.ci));
+  render();
+  say(`Moved to ${dest.name}.`);
+}
+
+function deleteAt(c, yankOnly) {
+  register = JSON.parse(JSON.stringify(c.card));
+  if (yankOnly) { say(`Copied “${c.card.title || "untitled"}”.`); return; }
+  checkpoint();
+  const found = findCard(c.card.id);
+  found.lane.cards.splice(found.index, 1);
+  const rest = visible(found.lane);
+  selectedId = rest.length ? rest[Math.min(c.ci, rest.length - 1)].id : null;
+  if (!selectedId) {
+    for (const lane of board.lanes) {
+      const v = visible(lane);
+      if (v.length) { selectedId = v[0].id; break; }
+    }
+  }
+  touch(); render();
+  say(`Deleted “${c.card.title || "untitled"}”. u to undo.`);
+}
+
+function paste(after) {
+  if (!needEdit()) return;
+  if (!register) return say("Register is empty.");
+  const c = cursor();
+  const lane = c ? c.lane : board.lanes[0];
+  if (!lane) return;
+  checkpoint();
+  const copy = { ...JSON.parse(JSON.stringify(register)), id: uid("c"), updated: nowISO() };
+  const at = c ? realIndex(lane, c.ci) + (after ? 1 : 0) : lane.cards.length;
+  lane.cards.splice(at, 0, copy);
+  selectedId = copy.id;
+  touch(); render();
+  say(`Pasted into ${lane.name}.`);
+}
+
+function openNew(after) {
+  if (!needEdit()) return;
+  const c = cursor();
+  const lane = c ? c.lane : board.lanes[0];
+  if (!lane) return say("Add a lane first — press A.");
+  addCard(lane, c ? realIndex(lane, c.ci) + (after ? 1 : 0) : lane.cards.length);
+}
+
+function toggleBlocked() {
+  if (!needEdit()) return;
+  const { c } = ensureCursor();
+  if (!c) return;
+  if (c.card.blockedOn) {
+    checkpoint();
+    c.card.blockedOn = "";
+    c.card.updated = nowISO();
+    touch(); render();
+    return say(`Unblocked “${c.card.title || "untitled"}”.`);
+  }
+  const why = prompt(`What is “${c.card.title || "this"}” waiting on?`, "");
+  if (why === null || !why.trim()) return;
+  checkpoint();
+  c.card.blockedOn = why.trim();
+  c.card.updated = nowISO();
+  touch(); render();
+  say(`Held: waiting on ${c.card.blockedOn}.`);
+}
+
+/* Space ticks the next open step, and untucks the last one when all are done —
+   so it reads as a single "advance this" key rather than a checkbox. */
+function tickStep() {
+  if (!needEdit()) return;
+  const { c } = ensureCursor();
+  if (!c) return;
+  if (!c.card.steps.length) return say("No checklist. Press i to add one.");
+  checkpoint();
+  const next = c.card.steps.find((st) => !st.done);
+  const step = next || c.card.steps[c.card.steps.length - 1];
+  step.done = !step.done;
+  c.card.updated = nowISO();
+  touch(); render();
+  const done = c.card.steps.filter((st) => st.done).length;
+  say(`${step.text} ${step.done ? "done" : "reopened"} — ${done}/${c.card.steps.length}.`);
+}
+
+/* ── Step mode ────────────────────────────────────────────────
+   One level below the card cursor. The same keys mean the same things down
+   here — j/k walks, J/K reorders, o opens a line, dd deletes — so there's
+   nothing new to learn, only a level to descend into.
+   ─────────────────────────────────────────────────────────── */
+function enterSteps() {
+  if (!needEdit()) return;
+  const { c } = ensureCursor();
+  if (!c) return;
+  if (!c.card.steps.length) {
+    // Nothing to walk yet — open the first line instead of refusing.
+    checkpoint();
+    c.card.steps.push({ text: "", done: false });
+    stepCursor = 0;
+    touch(); render();
+    return editStep(true);
+  }
+  stepCursor = 0;
+  render();
+  say(`Checklist for ${c.card.title || "this card"}. j and k to walk, Esc to leave.`);
+}
+
+function leaveSteps(msg) {
+  stepCursor = null;
+  render();
+  if (msg) say(msg);
+}
+
+/* Swap the active step's text for an input, in place on the card. */
+function editStep(isNew = false) {
+  const c = cursor();
+  if (!c || stepCursor === null) return;
+  const step = c.card.steps[stepCursor];
+  const el = rail.querySelector(
+    `.card[data-id="${CSS.escape(c.card.id)}"] .step[data-i="${stepCursor}"]`);
+  if (!el) return;
+  const txt = el.querySelector(".step__text");
+
+  const input = document.createElement("input");
+  input.className = "step__input";
+  input.type = "text";
+  input.value = step.text;
+  input.placeholder = "step";
+  input.setAttribute("aria-label", "Step text");
+  txt.replaceWith(input);
+  editingStep = true;
+  input.focus();
+  input.select();
+
+  let settled = false;
+  const finish = (keep) => {
+    if (settled) return;
+    settled = true;
+    editingStep = false;
+    const value = input.value.trim();
+    if (keep && value) {
+      step.text = value;
+      c.card.updated = nowISO();
+      touch();
+    } else if (isNew || !value) {
+      // An empty line is never worth keeping.
+      c.card.steps.splice(stepCursor, 1);
+      if (!c.card.steps.length) stepCursor = null;
+      else stepCursor = Math.min(stepCursor, c.card.steps.length - 1);
+      c.card.updated = nowISO();
+      touch();
+    }
+    render();
+  };
+
+  input.addEventListener("keydown", (ev) => {
+    ev.stopPropagation();
+    if (ev.key === "Enter") { ev.preventDefault(); finish(true); }
+    else if (ev.key === "Escape") { ev.preventDefault(); finish(false); }
+  });
+  input.addEventListener("blur", () => finish(true));
+}
+
+function addStep(after) {
+  const c = cursor();
+  if (!c) return;
+  checkpoint();
+  const at = stepCursor === null ? c.card.steps.length : stepCursor + (after ? 1 : 0);
+  c.card.steps.splice(at, 0, { text: "", done: false });
+  stepCursor = at;
+  c.card.updated = nowISO();
+  touch(); render();
+  editStep(true);
+}
+
+/* Returns true when the key belonged to step mode. */
+function stepKeys(e, k, n) {
+  const c = cursor();
+  if (!c) { stepCursor = null; return false; }
+  const steps = c.card.steps;
+  if (!steps.length) { stepCursor = null; return false; }
+  stepCursor = Math.max(0, Math.min(stepCursor, steps.length - 1));
+
+  const at = (i) => { stepCursor = Math.max(0, Math.min(steps.length - 1, i)); render(); };
+  const stamp = () => { c.card.updated = nowISO(); touch(); render(); };
+
+  switch (k) {
+    case "j": case "ArrowDown": at(stepCursor + n); return true;
+    case "k": case "ArrowUp":   at(stepCursor - n); return true;
+    case "g": armPending("g"); return true;
+    case "G": at(steps.length - 1); return true;
+
+    case " ": case "x": {
+      checkpoint();
+      steps[stepCursor].done = !steps[stepCursor].done;
+      const tally = steps.filter((st) => st.done).length;
+      stamp();
+      say(`${steps[stepCursor].text} ${steps[stepCursor].done ? "done" : "reopened"} — ${tally}/${steps.length}.`);
+      return true;
+    }
+    case "J": case "K": {
+      const to = stepCursor + (k === "J" ? n : -n);
+      if (to < 0 || to >= steps.length) return true;
+      checkpoint();
+      steps.splice(to, 0, steps.splice(stepCursor, 1)[0]);
+      stepCursor = to;
+      stamp();
+      say(`Step ${to + 1} of ${steps.length}.`);
+      return true;
+    }
+    case "o": addStep(true); return true;
+    case "O": addStep(false); return true;
+    case "i": case "Enter": editStep(false); return true;
+    case "d": armPending("d"); return true;
+
+    case "h": case "ArrowLeft": case "s": case "Escape":
+      leaveSteps("Back to the board.");
+      return true;
+  }
+  return false;
+}
+
+function stepPending(seq, k) {
+  const c = cursor();
+  if (!c) return;
+  const steps = c.card.steps;
+  if (seq === "g" && k === "g") { stepCursor = 0; render(); }
+  if (seq === "d" && k === "d") {
+    checkpoint();
+    const [gone] = steps.splice(stepCursor, 1);
+    if (!steps.length) stepCursor = null;
+    else stepCursor = Math.min(stepCursor, steps.length - 1);
+    c.card.updated = nowISO();
+    touch(); render();
+    say(`Removed “${gone.text}”. u to undo.`);
+  }
+}
+
+const MOTIONS = { h: "h", j: "j", k: "k", l: "l" };
+const CARRIES = { H: "H", J: "J", K: "K", L: "L" };
+const ARROWS = { ArrowLeft: "h", ArrowDown: "j", ArrowUp: "k", ArrowRight: "l" };
+
+function onKey(e) {
+  const t = e.target;
+  if (t instanceof Element &&
+      t.matches("input, textarea, select, [contenteditable='true']")) {
+    if (e.key === "Escape") { t.blur(); if (openId) closeDrawer(); paintMode(); }
+    return;
+  }
+  if (e.key === "Escape") {
+    if (pop) return clearPending(), closePop();
+    if (openId) { closeDrawer(); paintMode(); return; }
+    if (stepCursor !== null) { clearPending(); return leaveSteps("Back to the board."); }
+    if (count || pending) return clearPending();
+    if (query || tagFilter) {
+      query = ""; tagFilter = null; $("#search").value = "";
+      render(); return say("Filter cleared.");
+    }
+    select(null);
+    return;
+  }
+  // The drawer owns the keyboard while it's open, and anything the browser
+  // already binds stays the browser's.
+  if (openId || e.metaKey || e.ctrlKey || e.altKey) return;
+
+  const k = e.key;
+
+  // Count prefix. 0 is a motion until a count is underway, exactly as in vim.
+  if (/^[0-9]$/.test(k) && !(k === "0" && !count)) {
+    count += k;
+    paintMode();
+    e.preventDefault();
+    return;
+  }
+
+  const n = Math.min(parseInt(count || "1", 10), 999);
+  const seq = pending;
+
+  const done = (fn) => { e.preventDefault(); clearPending(); fn(); };
+
+  // The checklist owns the keyboard while the cursor is inside it.
+  if (stepCursor !== null) {
+    if (seq) { e.preventDefault(); clearPending(); stepPending(seq, k); return; }
+    if (k === "u") return done(undo);
+    if (k === "U") return done(redo);
+    if (stepKeys(e, k, n)) {
+      e.preventDefault();
+      if (k !== "g" && k !== "d") clearPending();
+      return;
+    }
+  }
+
+  // Two-key sequences resolve first.
+  if (seq === "g") return done(() => {
+    if (k !== "g") return;
+    const { c } = ensureCursor();
+    if (c && c.vis.length) select(c.vis[0].id);
+  });
+  if (seq === "d") return done(() => {
+    if (k !== "d" || !needEdit()) return;
+    const c = cursor(); if (c) deleteAt(c, false);
+  });
+  if (seq === "y") return done(() => {
+    if (k !== "y") return;
+    const c = cursor(); if (c) deleteAt(c, true);
+  });
+
+  // Arrows mirror hjkl, shifted arrows mirror HJKL. Checked before the letter
+  // maps so Shift+Arrow doesn't get swallowed as a plain motion.
+  if (Object.hasOwn(ARROWS, k)) {
+    const dir = ARROWS[k];
+    return done(() => e.shiftKey ? carry(dir.toUpperCase(), n) : motion(dir, n));
+  }
+  if (Object.hasOwn(MOTIONS, k)) return done(() => motion(MOTIONS[k], n));
+  if (Object.hasOwn(CARRIES, k)) return done(() => carry(CARRIES[k], n));
+  if (k === "g" || k === "d" || k === "y") {
+    e.preventDefault(); armPending(k); return;
+  }
+
+  switch (k) {
+    case "G": return done(() => {
+      const { c } = ensureCursor();
+      if (c && c.vis.length) select(c.vis[c.vis.length - 1].id);
+    });
+    case "0": return done(() => motion("h", board.lanes.length));
+    case "$": return done(() => motion("l", board.lanes.length));
+    case "i":
+    case "Enter": return done(() => {
+      if (!needEdit()) return;
+      const { c } = ensureCursor();
+      if (c) openCard(c.card.id);
+    });
+    case "o": return done(() => openNew(true));
+    case "O": return done(() => openNew(false));
+    case "p": return done(() => paste(true));
+    case "P": return done(() => paste(false));
+    case "s": return done(enterSteps);
+    case "b": return done(toggleBlocked);
+    case " ": return done(tickStep);
+    case "u": return done(undo);
+    case "U": return done(redo);
+    case "e": return done(() => setEdit(!editMode));
+    case "A": return done(() => {
+      if (!needEdit()) return;
+      checkpoint();
+      board.lanes.push({ id: uid("l"), name: "New lane", tone: "grey", cards: [] });
+      touch(); render(); say("Lane added.");
+    });
+    case "/": return done(() => $("#search").focus());
+    case "?": return done(() => $("#helpToggle").click());
+  }
+  clearPending();
+}
+
+/* ── Lane menu ────────────────────────────────────────────── */
+let pop = null;
+function closePop() { if (pop) { pop.remove(); pop = null; } }
+
+function laneMenu(lane, anchor) {
+  closePop();
+  const idx = board.lanes.indexOf(lane);
+  const items = [
+    ["Rename", () => {
+      const el = rail.querySelector(`.lane[data-id="${CSS.escape(lane.id)}"] .lane__name`);
+      if (el) { el.focus(); document.getSelection().selectAllChildren(el); }
+    }],
+    [`Accent — ${lane.tone}`, () => {
+      checkpoint();
+      lane.tone = TONES[(TONES.indexOf(lane.tone) + 1) % TONES.length];
+      touch(); render();
+    }],
+    null,
+    ["Move left", idx > 0 ? () => {
+      checkpoint();
+      board.lanes.splice(idx - 1, 0, board.lanes.splice(idx, 1)[0]);
+      touch(); render();
+    } : null],
+    ["Move right", idx < board.lanes.length - 1 ? () => {
+      checkpoint();
+      board.lanes.splice(idx + 1, 0, board.lanes.splice(idx, 1)[0]);
+      touch(); render();
+    } : null],
+    null,
+    ["Delete lane", () => {
+      if (lane.cards.length && !confirm(`Delete “${lane.name}” and its ${lane.cards.length} card(s)?`)) return;
+      checkpoint();
+      board.lanes.splice(idx, 1);
+      touch(); render(); say("Lane deleted.");
+    }, "is-danger"]
+  ];
+
+  pop = document.createElement("div");
+  pop.className = "pop";
+  for (const item of items) {
+    if (!item) { pop.append(document.createElement("hr")); continue; }
+    const [label, fn, cls] = item;
+    const b = document.createElement("button");
+    b.textContent = label;
+    if (cls) b.className = cls;
+    if (!fn) { b.disabled = true; b.style.opacity = ".35"; }
+    else b.addEventListener("click", () => { closePop(); fn(); });
+    pop.append(b);
+  }
+  document.body.append(pop);
+
+  const r = anchor.getBoundingClientRect();
+  const pr = pop.getBoundingClientRect();
+  pop.style.top = `${Math.min(r.bottom + 4, innerHeight - pr.height - 8)}px`;
+  pop.style.left = `${Math.max(8, Math.min(r.right - pr.width, innerWidth - pr.width - 8))}px`;
+  pop.querySelector("button:not(:disabled)").focus();
+}
+
+document.addEventListener("click", (e) => { if (pop && !pop.contains(e.target)) closePop(); });
+
+/* ── Drawer ───────────────────────────────────────────────── */
+function openCard(id, fresh = false) {
+  closeDrawer();
+  const found = findCard(id);
+  if (!found) return;
+  openId = id;
+  select(id);
+  // One checkpoint per editing session, so u rewinds the whole edit rather
+  // than one keystroke of it. A brand new card already has one from addCard.
+  if (!fresh) checkpoint();
+  const { card } = found;
+
+  const scrim = document.createElement("div");
+  scrim.className = "scrim";
+  scrim.addEventListener("click", closeDrawer);
+
+  const d = document.createElement("aside");
+  d.className = "drawer";
+  d.setAttribute("role", "dialog");
+  d.setAttribute("aria-label", "Project details");
+
+  const head = document.createElement("div");
+  head.className = "drawer__head";
+  const hl = document.createElement("span");
+  hl.className = "label";
+  hl.textContent = "Project";
+  const close = document.createElement("button");
+  close.className = "btn";
+  close.textContent = "Close";
+  close.style.marginLeft = "auto";
+  close.addEventListener("click", closeDrawer);
+  head.append(hl, close);
+
+  const body = document.createElement("div");
+  body.className = "drawer__body";
+
+  const field = (labelText, control, hint) => {
+    const wrapsInputs = control.tagName === "DIV";
+    const f = document.createElement(wrapsInputs ? "div" : "label");
+    f.className = "field";
+    const l = document.createElement("span");
+    l.className = "label";
+    l.textContent = labelText;
+    f.append(l, control);
+    if (hint) {
+      const h = document.createElement("span");
+      h.className = "hint";
+      h.textContent = hint;
+      f.append(h);
+    }
+    return f;
+  };
+
+  const bump = () => { card.updated = nowISO(); touch(); render(); };
+
+  const title = document.createElement("input");
+  title.className = "title-in";
+  title.value = card.title;
+  title.placeholder = "What is it?";
+  title.addEventListener("input", () => { card.title = title.value; bump(); });
+
+  const note = document.createElement("textarea");
+  note.value = card.note;
+  note.placeholder = "State of play, next action, why it stalled…";
+  note.addEventListener("input", () => { card.note = note.value; bump(); });
+
+  const tags = document.createElement("input");
+  tags.value = card.tags.join(", ");
+  tags.placeholder = "ops, infra";
+  tags.addEventListener("input", () => {
+    card.tags = tags.value.split(",").map((t) => t.trim()).filter(Boolean);
+    bump();
+  });
+
+  const link = document.createElement("input");
+  link.type = "url";
+  link.value = card.link;
+  link.placeholder = "https://…";
+  link.addEventListener("input", () => { card.link = link.value; bump(); });
+
+  const blockedIn = document.createElement("input");
+  blockedIn.value = card.blockedOn;
+  blockedIn.placeholder = "POI 10 stability";
+  blockedIn.addEventListener("input", () => {
+    card.blockedOn = blockedIn.value.trim();
+    bump();
+  });
+
+  // Checklist. Text edits don't rebuild the list — that would eat focus
+  // mid-word — so only add, remove and tick redraw it.
+  const stepsBox = document.createElement("div");
+  stepsBox.className = "steps-edit";
+
+  function drawSteps() {
+    stepsBox.replaceChildren();
+    card.steps.forEach((st, i) => {
+      const row = document.createElement("div");
+      row.className = "steps-edit__row";
+
+      const box = document.createElement("input");
+      box.type = "checkbox";
+      box.checked = st.done;
+      box.setAttribute("aria-label", `Done: ${st.text || "step " + (i + 1)}`);
+      box.addEventListener("change", () => { st.done = box.checked; bump(); drawSteps(); });
+
+      const txt = document.createElement("input");
+      txt.type = "text";
+      txt.value = st.text;
+      txt.placeholder = "Step";
+      txt.addEventListener("input", () => { st.text = txt.value; bump(); });
+      txt.addEventListener("keydown", (ev) => {
+        if (ev.key !== "Enter") return;
+        ev.preventDefault();
+        card.steps.splice(i + 1, 0, { text: "", done: false });
+        bump(); drawSteps();
+        stepsBox.children[i + 1].querySelector('input[type="text"]').focus();
+      });
+
+      const kill = document.createElement("button");
+      kill.className = "steps-edit__kill";
+      kill.type = "button";
+      kill.textContent = "×";
+      kill.setAttribute("aria-label", `Remove ${st.text || "step " + (i + 1)}`);
+      kill.addEventListener("click", () => { card.steps.splice(i, 1); bump(); drawSteps(); });
+
+      row.append(box, txt, kill);
+      stepsBox.append(row);
+    });
+
+    const add = document.createElement("button");
+    add.className = "lane__add";
+    add.type = "button";
+    add.textContent = card.steps.length ? "+ Step" : "+ Add a checklist";
+    add.addEventListener("click", () => {
+      card.steps.push({ text: "", done: false });
+      bump(); drawSteps();
+      stepsBox.querySelectorAll('input[type="text"]')[card.steps.length - 1].focus();
+    });
+    stepsBox.append(add);
+  }
+  drawSteps();
+
+  const laneSel = document.createElement("select");
+  for (const l of board.lanes) {
+    const o = document.createElement("option");
+    o.value = l.id; o.textContent = l.name;
+    o.selected = l.id === found.lane.id;
+    laneSel.append(o);
+  }
+  laneSel.addEventListener("change", () => {
+    moveCard(card.id, laneSel.value, board.lanes.find((l) => l.id === laneSel.value).cards.length);
+    render();
+  });
+
+  body.append(
+    field("Title", title),
+    field("Waiting on", blockedIn, "Leave empty if nothing is holding it up"),
+    field("Notes", note),
+    field("Checklist", stepsBox, "Sub-steps. The card shows the first five and a tally."),
+    field("Tags", tags, "Comma separated"),
+    field("Link", link, "Repo, issue, live URL — shown on the card"),
+    field("Lane", laneSel)
+  );
+
+  const foot = document.createElement("div");
+  foot.className = "drawer__foot";
+  const stamp = document.createElement("span");
+  stamp.className = "hint mono tnum";
+  stamp.textContent = `added ${fmtDate(card.created)} · edited ${fmtDate(card.updated)}`;
+  const del = document.createElement("button");
+  del.className = "btn is-danger";
+  del.textContent = "Delete";
+  del.style.marginLeft = "auto";
+  del.addEventListener("click", () => {
+    if (card.title && !confirm(`Delete “${card.title}”?`)) return;
+    checkpoint();
+    const f = findCard(card.id);
+    f.lane.cards.splice(f.index, 1);
+    closeDrawer(); touch(); render(); say("Project deleted.");
+  });
+  foot.append(stamp, del);
+
+  d.append(head, body, foot);
+  document.body.append(scrim, d);
+  title.focus();
+  if (card.title) title.select();
+}
+
+function closeDrawer() {
+  document.querySelector(".scrim")?.remove();
+  document.querySelector(".drawer")?.remove();
+  openId = null;
+  paintMode();
+  const el = selectedId && rail.querySelector(`.card[data-id="${CSS.escape(selectedId)}"]`);
+  if (el) el.focus();
+}
+
+/* ── Import / export ──────────────────────────────────────── */
+function doExport() {
+  const json = JSON.stringify(exportable(board), null, 2);
+  const blob = new Blob([json], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "board.json";
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  say("board.json downloaded. Deploy it next to index.html.");
+}
+
+async function doCopy() {
+  const json = JSON.stringify(exportable(board), null, 2);
+  const btn = $("#copyBtn");
+  try {
+    await navigator.clipboard.writeText(json);
+    btn.textContent = "Copied";
+  } catch {
+    btn.textContent = "Blocked";
+  }
+  setTimeout(() => { btn.textContent = "Copy JSON"; }, 1600);
+}
+
+function doImport(file) {
+  const reader = new FileReader();
+  reader.onload = () => {
+    let next;
+    try { next = normalize(JSON.parse(reader.result)); }
+    catch (err) {
+      alert(`That file didn't load.\n\n${err.message}\n\nExport a board from here to see the shape it expects.`);
+      return;
+    }
+    checkpoint();
+    board = next;
+    selectedId = null;
+    hasDraft = true;
+    touch(); render();
+    say(`Imported ${allCards().length} projects.`);
+  };
+  reader.readAsText(file);
+}
+
+/* ── Wiring ───────────────────────────────────────────────── */
+$("#editToggle").addEventListener("click", () => setEdit(!editMode));
+
+function setEdit(on) {
+  editMode = on;
+  const b = $("#editToggle");
+  b.setAttribute("aria-pressed", String(on));
+  b.textContent = on ? "Editing" : "Edit";
+  if (!on) closeDrawer();
+  render();
+  say(on ? "Editing on. Changes stay in this browser until you export." : "Editing off.");
+}
+
+$("#exportBtn").addEventListener("click", doExport);
+$("#copyBtn").addEventListener("click", doCopy);
+$("#importBtn").addEventListener("click", () => $("#fileInput").click());
+$("#fileInput").addEventListener("change", (e) => {
+  const f = e.target.files[0];
+  if (f) doImport(f);
+  e.target.value = "";
+});
+
+$("#search").addEventListener("input", (e) => { query = e.target.value.trim(); render(); });
+
+$("#boardTitle").addEventListener("blur", (e) => {
+  const v = e.target.textContent.trim();
+  if ((v || "Board") === board.title) return;
+  checkpoint();
+  board.title = v || "Board";
+  e.target.textContent = board.title;
+  touch(); render();
+});
+$("#boardTitle").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") { e.preventDefault(); e.target.blur(); }
+});
+
+$("#helpToggle").addEventListener("click", (e) => {
+  const panel = $("#helpPanel");
+  const open = panel.hidden;
+  panel.hidden = !open;
+  e.currentTarget.setAttribute("aria-expanded", String(open));
+});
+
+$("#wipeBtn").addEventListener("click", () => {
+  if (!confirm("Replace everything with an empty three-lane board?")) return;
+  checkpoint();
+  selectedId = null;
+  board = normalize(seed());
+  hasDraft = true;
+  touch(); setEdit(true); say("Board cleared.");
+});
+
+document.addEventListener("keydown", onKey);
+
+window.addEventListener("beforeunload", (e) => {
+  if (hasDraft && !storageOK) { e.preventDefault(); e.returnValue = ""; }
+});
+
+/* ── Boot ─────────────────────────────────────────────────── */
+let draftBase = null;
+
+// Browsers refuse cross-origin fetches from file://, so board.json is simply
+// unreachable there. Skip the request rather than logging a CORS failure.
+const isFile = location.protocol === "file:";
+
+async function boot() {
+  if (!isFile) {
+    try {
+      const res = await fetch("./board.json", { cache: "no-store" });
+      if (res.ok) published = normalize(await res.json());
+    } catch { /* no board.json deployed yet — fine */ }
+  }
+
+  const draft = loadDraft();
+  if (draft) {
+    board = draft.board;
+    draftBase = draft.base;
+    hasDraft = true;
+  } else if (published) {
+    board = published;
+    draftBase = published.updated;
+  } else {
+    board = normalize(seed());
+    draftBase = null;
+  }
+
+  const fresh = !published && !draft;
+  $("#storageNote").textContent = isFile
+    ? "Opened from disk — board.json can't be read over file://. Import it, or serve the folder over http."
+    : published
+      ? "Reading board.json from this directory."
+      : "No board.json here — this board is empty. Export one when you're ready to publish.";
+
+  // Nothing published and no draft means you're setting up, not visiting.
+  if (fresh) setEdit(true);
+  else render();
+}
+
+boot();
+})();
+</script>
+</body>
+</html>

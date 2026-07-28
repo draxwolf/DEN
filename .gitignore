@@ -1,0 +1,9 @@
+# Your board is data, not source. The app gets versioned here; the board gets
+# deployed. Keep yours in a private repo, a backup, or just on the deploy target.
+board.json
+board.*.json
+*.bak.json
+
+# Local editor / tooling state
+.claude/settings.local.json
+.DS_Store
