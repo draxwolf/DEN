@@ -499,6 +499,17 @@ body {
   font-variant-numeric: tabular-nums;
   color: var(--ink-3);
   margin-left: auto;
+  white-space: nowrap;
+}
+/* A card that has crossed lanes says so for good — the journey is part of the
+   record. Only the last few days get the wash, so a fresh arrival catches the
+   eye from across the rail without every old card shouting. */
+.card__time.is-moved { color: var(--ink-2); }
+.card__time.is-fresh {
+  color: var(--hot);
+  background: var(--hot-w);
+  padding: 1px 5px;
+  margin-right: -2px;
 }
 
 .slot {
@@ -795,10 +806,17 @@ body {
       "note": "Optional detail.",
       "tags": ["web"],
       "link": "https://example.com",
-      "updated": "2026-07-28T09:00:00Z"
+      "created": "2026-07-08T10:00:00Z",
+      "updated": "2026-07-28T09:00:00Z",
+      "moved": "2026-07-26T18:00:00Z",
+      "movedFrom": "To do"
     }]
   }]
 }</pre>
+        <p><code>moved</code> is stamped whenever a card crosses into another lane —
+        the card then reads <em>moved 2d ago</em> instead of its edit date, and wears
+        a hot mark for the first three days. Reordering within a lane isn't a move.
+        Leave both fields out for a card that has never travelled.</p>
       </section>
       <section>
         <h3>Keyboard — move</h3>
@@ -900,6 +918,7 @@ let selectedId = null;   // the cursor
 let stepCursor = null;   // index into the selected card's checklist, or null
 let editingStep = false; // an inline step input is open; hold off re-rendering
 let register = null;     // yanked / deleted card, for p
+let registerFrom = null; // the lane it came out of, so a cross-lane p reads as a move
 const undoStack = [];
 const redoStack = [];
 
@@ -936,6 +955,45 @@ function fmtDate(iso) {
   return d.toLocaleDateString(undefined, sameYear
     ? { month: "short", day: "numeric" }
     : { month: "short", day: "numeric", year: "2-digit" });
+}
+
+/* Terse relative age — "3d ago" reads at a glance where "Jul 26" needs
+   arithmetic. The absolute date stays one hover away. */
+function fmtRel(iso) {
+  const t = new Date(iso).getTime();
+  if (isNaN(t)) return "";
+  const secs = Math.max(0, Math.round((Date.now() - t) / 1000));
+  if (secs < 60) return "just now";
+  const mins = Math.floor(secs / 60);
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days === 1) return "yesterday";
+  if (days < 7) return `${days}d ago`;
+  const wks = Math.floor(days / 7);
+  if (wks < 9) return `${wks}w ago`;
+  const mos = Math.floor(days / 30);
+  if (mos < 12) return `${mos}mo ago`;
+  return `${Math.floor(days / 365)}y ago`;
+}
+
+/* Moves within this window still count as news, and get the hot wash. */
+const FRESH_MOVE_MS = 3 * 24 * 60 * 60 * 1000;
+const movedRecently = (card) =>
+  Boolean(card.moved) && Date.now() - new Date(card.moved).getTime() < FRESH_MOVE_MS;
+
+/* The card's whole history on one line — the drawer footer, and the tooltip
+   behind the timestamp on the card itself. */
+function historyLine(card, laneName) {
+  const bits = [`added ${fmtDate(card.created)}`];
+  if (card.moved) {
+    const from = card.movedFrom ? ` from ${card.movedFrom}` : "";
+    const to = (laneName && laneName !== card.movedFrom) ? ` to ${laneName}` : "";
+    bits.push(`moved${from}${to} ${fmtDate(card.moved)} (${fmtRel(card.moved)})`);
+  }
+  if (card.updated) bits.push(`edited ${fmtDate(card.updated)}`);
+  return bits.join(" · ");
 }
 
 function safeHref(url) {
@@ -996,7 +1054,10 @@ function normalize(raw) {
           .filter((st) => st.text),
         blockedOn: (c && typeof c.blockedOn === "string") ? c.blockedOn.trim() : "",
         created: (c && typeof c.created === "string") ? c.created : nowISO(),
-        updated: (c && typeof c.updated === "string") ? c.updated : nowISO()
+        updated: (c && typeof c.updated === "string") ? c.updated : nowISO(),
+        // Stamped when a card crosses lanes. Absent on cards that never have.
+        moved: (c && typeof c.moved === "string") ? c.moved : "",
+        movedFrom: (c && typeof c.movedFrom === "string") ? c.movedFrom.trim() : ""
       }))
     }))
   };
@@ -1012,7 +1073,8 @@ function exportable(b) {
       cards: l.cards.map((c) => ({
         id: c.id, title: c.title, note: c.note, tags: c.tags,
         link: c.link, steps: c.steps, blockedOn: c.blockedOn,
-        created: c.created, updated: c.updated
+        created: c.created, updated: c.updated,
+        ...(c.moved ? { moved: c.moved, movedFrom: c.movedFrom } : {})
       }))
     }))
   };
@@ -1396,7 +1458,7 @@ function cardEl(card, lane) {
   }
 
   const href = safeHref(card.link);
-  if (card.tags.length || href || card.updated || card.steps.length) {
+  if (card.tags.length || href || card.moved || card.updated || card.steps.length) {
     const meta = document.createElement("div");
     meta.className = "card__meta";
     if (card.steps.length) {
@@ -1418,11 +1480,18 @@ function cardEl(card, lane) {
       a.textContent = hostOf(href) + " ↗";
       meta.append(a);
     }
-    if (card.updated) {
+    // A card that has crossed lanes leads with that — where it last got to is
+    // more of the story than when its text was last touched.
+    const when = card.moved || card.updated;
+    if (when) {
+      const fresh = movedRecently(card);
       const t = document.createElement("time");
-      t.className = "card__time";
-      t.dateTime = card.updated;
-      t.textContent = fmtDate(card.updated);
+      t.className = "card__time"
+        + (card.moved ? " is-moved" : "")
+        + (fresh ? " is-fresh" : "");
+      t.dateTime = when;
+      t.textContent = (card.moved ? "moved " : "") + fmtRel(when);
+      t.title = historyLine(card, lane && lane.name);
       meta.append(t);
     }
     el.append(meta);
@@ -1445,7 +1514,8 @@ function addCard(lane, at = lane.cards.length) {
   const card = {
     id: uid("c"), title: "", note: "", tags: [], link: "",
     steps: [], blockedOn: "",
-    created: nowISO(), updated: nowISO()
+    created: nowISO(), updated: nowISO(),
+    moved: "", movedFrom: ""
   };
   lane.cards.splice(at, 0, card);
   selectedId = card.id;
@@ -1457,8 +1527,14 @@ function moveCard(id, toLaneId, toIndex) {
   const found = findCard(id);
   const dest = board.lanes.find((l) => l.id === toLaneId);
   if (!found || !dest) return;
+  const crossed = found.lane.id !== dest.id;
   found.lane.cards.splice(found.index, 1);
   dest.cards.splice(Math.max(0, Math.min(toIndex, dest.cards.length)), 0, found.card);
+  // Reordering inside a lane isn't a move — only crossing one is.
+  if (crossed) {
+    found.card.moved = nowISO();
+    found.card.movedFrom = found.lane.name;
+  }
   found.card.updated = nowISO();
   touch();
 }
@@ -1687,6 +1763,7 @@ function carry(dir, n) {
 
 function deleteAt(c, yankOnly) {
   register = JSON.parse(JSON.stringify(c.card));
+  registerFrom = c.lane.name;
   if (yankOnly) { say(`Copied “${c.card.title || "untitled"}”.`); return; }
   checkpoint();
   const found = findCard(c.card.id);
@@ -1711,6 +1788,11 @@ function paste(after) {
   if (!lane) return;
   checkpoint();
   const copy = { ...JSON.parse(JSON.stringify(register)), id: uid("c"), updated: nowISO() };
+  // dd then p in another lane is a move by another route — stamp it like one.
+  if (registerFrom && registerFrom !== lane.name) {
+    copy.moved = nowISO();
+    copy.movedFrom = registerFrom;
+  }
   const at = c ? realIndex(lane, c.ci) + (after ? 1 : 0) : lane.cards.length;
   lane.cards.splice(at, 0, copy);
   selectedId = copy.id;
@@ -2243,6 +2325,7 @@ function openCard(id, fresh = false) {
   }
   laneSel.addEventListener("change", () => {
     moveCard(card.id, laneSel.value, board.lanes.find((l) => l.id === laneSel.value).cards.length);
+    restamp();
     render();
   });
 
@@ -2260,7 +2343,11 @@ function openCard(id, fresh = false) {
   foot.className = "drawer__foot";
   const stamp = document.createElement("span");
   stamp.className = "hint mono tnum";
-  stamp.textContent = `added ${fmtDate(card.created)} · edited ${fmtDate(card.updated)}`;
+  const restamp = () => {
+    const f = findCard(card.id);
+    stamp.textContent = historyLine(card, f && f.lane.name);
+  };
+  restamp();
   const del = document.createElement("button");
   del.className = "btn is-danger";
   del.textContent = "Delete";

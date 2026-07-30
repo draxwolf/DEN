@@ -55,14 +55,20 @@ one next to `index.html`.
         { "text": "ship", "done": false }
       ],
       "created": "2026-07-08T10:00:00Z",
-      "updated": "2026-07-28T09:00:00Z"
+      "updated": "2026-07-28T09:00:00Z",
+      "moved": "2026-07-26T18:00:00Z",
+      "movedFrom": "Building"
     }]
   }]
 }
 ```
 
 `tone` is one of `blue`, `hot`, `grey` (the lane's accent rule). A non-empty
-`blockedOn` is what marks a card held. A step may be written as a bare string
+`blockedOn` is what marks a card held. `moved` / `movedFrom` are stamped
+whenever a card crosses lanes — by drag, by `H`/`L`, by `dd`+`p` into another
+lane, or from the drawer's lane picker. The card then shows *moved 2d ago* in
+place of its edit date, tinted hot for the first three days, with the full
+history (added · moved from where · edited) on hover. A step may be written as a bare string
 (`"steps": ["code", "ship"]`) when you're editing by hand — import expands it.
 Everything else is optional; import fills in what's missing rather than
 rejecting the file.
