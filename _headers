@@ -1,0 +1,14 @@
+# Cloudflare Pages reads this at the deploy root.
+# The board is two files that change under the same names, so neither may sit
+# in a browser cache — a stale board.json is a board that lies.
+/
+  Cache-Control: no-cache
+/index.html
+  Cache-Control: no-cache
+/board.json
+  Cache-Control: no-cache
+  Content-Type: application/json; charset=utf-8
+
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: no-referrer

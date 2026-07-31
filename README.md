@@ -15,10 +15,27 @@ published board reads from `board.json`, which you'll have to update out-of-chan
 
 ## Deploying
 
-**Cloudflare Pages** — connect the repo, framework preset *None*, build command
-empty, output directory `/`. Or skip git:
+**Cloudflare Pages** — direct upload, once:
 
-    npx wrangler pages deploy . --project-name=board
+    npx wrangler login
+    npx wrangler pages project create den --production-branch main
+
+then `./publish.sh` for every publish after that. It validates the JSON, keeps
+the previous board as `board.bak.json`, and uploads `index.html`, `board.json`
+and `_headers` out of a staging directory — nothing else in the folder can ride
+along. Hand it a fresh export to take that first:
+
+    ./publish.sh ~/Downloads/board.json
+    ./publish.sh -n                       # check and stage, don't deploy
+
+Connecting the repo to Pages' git builds instead would deploy the app *without*
+a board: `board.json` is data and is deliberately gitignored.
+
+**A custom domain** — Pages project → Custom domains → `den.example.com`. The
+CNAME is created for you when the zone is on the same account. If the zone
+already has a redirect rule (an apex that forwards elsewhere, say), check its
+expression matches only the hostnames you meant — a rule written against
+`http.host contains "example.com"` will swallow the new subdomain too.
 
 **Any VPS** — it's static files. With Caddy:
 
