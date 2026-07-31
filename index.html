@@ -170,7 +170,9 @@ body {
   padding: 13px 20px;
   flex-wrap: wrap;
 }
-.brand { display: flex; align-items: baseline; gap: 12px; min-width: 0; }
+/* Wraps rather than squeezes — a long board title on a phone should push the
+   footnote to its own line, not get crushed by it. */
+.brand { display: flex; align-items: baseline; gap: 12px; row-gap: 2px; min-width: 0; flex-wrap: wrap; }
 .brand__mark {
   width: 11px; height: 22px;
   background: var(--blue);
@@ -193,6 +195,17 @@ body {
 }
 .brand__title[contenteditable="true"] { border-color: var(--rule); border-style: dashed; cursor: text; }
 .brand__sub { font-size: 12px; color: var(--ink-3); }
+/* Whose furniture this is. Quiet by design — the board is the point, the tool
+   underneath it isn't, so it sits at the weight of a footnote. */
+.brand__src {
+  font-size: 11px;
+  letter-spacing: .04em;
+  color: var(--ink-3);
+  text-decoration: none;
+  white-space: nowrap;
+  border-bottom: 1px solid transparent;
+}
+.brand__src:hover, .brand__src:focus-visible { color: var(--hot); border-bottom-color: var(--hot); }
 
 .bar__spacer { flex: 1 1 40px; }
 .bar__tools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
@@ -702,8 +715,38 @@ body {
   line-height: 1.6;
   color: var(--ink-2);
 }
+/* The panel leads with the keys, because that's what anyone opens it twice for.
+   The deployment story matters once — it sits one disclosure away. */
+.foot__lede, .more { grid-column: 1 / -1; }
+.foot__lede {
+  font-size: 14px; line-height: 1.6;
+  color: var(--ink); max-width: 74ch;
+}
+.more > summary {
+  font-family: var(--font-mono); font-size: 11px;
+  letter-spacing: .12em; text-transform: uppercase;
+  color: var(--ink-3);
+  padding: 9px 0;
+  border-top: 1px solid var(--rule-soft);
+  cursor: pointer;
+  list-style: none;
+}
+.more > summary::-webkit-details-marker { display: none; }
+.more > summary::before { content: "▸"; color: var(--hot); margin-right: 8px; }
+.more[open] > summary::before { content: "▾"; }
+.more > summary:hover { color: var(--ink); }
+.more > summary:focus-visible { outline: 2px solid var(--hot); outline-offset: 2px; }
+.more__grid {
+  display: grid;
+  gap: 26px 30px;
+  grid-template-columns: repeat(auto-fit, minmax(268px, 1fr));
+  padding: 18px 0 4px;
+}
+
 .keys { display: grid; grid-template-columns: auto 1fr; gap: 5px 12px; font-size: 12.5px; color: var(--ink-2); }
-.keys kbd {
+/* Same key-chip everywhere in the panel, prose included — a key named in a
+   sentence is the same object as one named in the table. */
+.keys kbd, .foot__panel kbd {
   font-family: var(--font-mono); font-size: 10.5px;
   border: 1px solid var(--rule); padding: 1px 5px;
   background: var(--stock-well); color: var(--ink);
@@ -731,6 +774,9 @@ body {
       <span class="brand__mark" aria-hidden="true"></span>
       <h1 class="brand__title" id="boardTitle" spellcheck="false">Projects</h1>
       <span class="brand__sub mono tnum" id="boardMeta"></span>
+      <a class="brand__src mono" href="https://github.com/InconsolableCellist/DEN"
+         target="_blank" rel="noopener noreferrer"
+         title="DEN — the single-file board this runs on. Source on GitHub.">a DEN board ↗</a>
     </div>
     <span class="bar__spacer"></span>
     <div class="bar__tools">
@@ -746,6 +792,9 @@ body {
       <button class="btn" id="exportBtn">Export</button>
       <button class="btn" id="importBtn">Import</button>
       <button class="btn" id="copyBtn">Copy JSON</button>
+      <span class="sep" aria-hidden="true"></span>
+      <button class="btn is-danger" id="wipeBtn"
+              title="Wipes your copy back to three empty lanes. What's published stays up until you export a new board and deploy it.">Clear board</button>
     </div>
   </header>
 
@@ -758,7 +807,7 @@ body {
 
   <footer class="foot">
     <div class="foot__bar">
-      <button class="btn" id="helpToggle" aria-expanded="false" aria-controls="helpPanel">Publishing &amp; keys</button>
+      <button class="btn" id="helpToggle" aria-expanded="false" aria-controls="helpPanel">Keys &amp; publishing</button>
       <span class="foot__note" id="storageNote"></span>
       <span class="bar__spacer"></span>
       <span class="mode" id="mode">
@@ -767,57 +816,9 @@ body {
       </span>
     </div>
     <div class="foot__panel" id="helpPanel" hidden>
-      <section>
-        <h3>How publishing works</h3>
-        <p>The board renders whatever is in <code>board.json</code> sitting next to this file. Editing here changes only your own browser's copy — anyone visiting can toggle edit too, and it never touches what you published.</p>
-        <p>The loop is: edit → <strong>Export</strong> → drop the new <code>board.json</code> next to <code>index.html</code> → deploy. Your published board is a file you own, diffable in git.</p>
-      </section>
-      <section>
-        <h3>Cloudflare Pages</h3>
-        <ol>
-          <li>Put <code>index.html</code> and <code>board.json</code> in a git repo.</li>
-          <li>Pages → Create → Connect to Git. Framework preset <em>None</em>, build command empty, output directory <code>/</code>.</li>
-          <li>Every push republishes. Or skip git entirely:</li>
-        </ol>
-        <pre>npx wrangler pages deploy . --project-name=board</pre>
-      </section>
-      <section>
-        <h3>Your own VPS</h3>
-        <p>It's two static files — any web server will do. With Caddy:</p>
-        <pre>board.example.com {
-    root * /srv/board
-    file_server
-}</pre>
-        <p>Then <code>scp index.html board.json vps:/srv/board/</code> after each export. Add <code>basicauth</code> on a <code>/edit</code> path if you ever want the write side gated.</p>
-      </section>
-      <section>
-        <h3>The JSON</h3>
-        <p>Hand-editable on purpose — lanes hold cards, ids are strings, dates are ISO 8601. Import accepts any file matching this shape.</p>
-        <pre>{
-  "schema": "kanban.v1",
-  "title": "Projects",
-  "lanes": [{
-    "id": "l1",
-    "name": "Building",
-    "tone": "hot",
-    "cards": [{
-      "id": "c1",
-      "title": "Public project board",
-      "note": "Optional detail.",
-      "tags": ["web"],
-      "link": "https://example.com",
-      "created": "2026-07-08T10:00:00Z",
-      "updated": "2026-07-28T09:00:00Z",
-      "moved": "2026-07-26T18:00:00Z",
-      "movedFrom": "To do"
-    }]
-  }]
-}</pre>
-        <p><code>moved</code> is stamped whenever a card crosses into another lane —
-        the card then reads <em>moved 2d ago</em> instead of its edit date, and wears
-        a hot mark for the first three days. Reordering within a lane isn't a move.
-        Leave both fields out for a card that has never travelled.</p>
-      </section>
+      <p class="foot__lede">This board is live — clear it and/or press <kbd>e</kbd> to make your own.
+      You can then <strong>Export</strong> it host it yourself. (Nothing you
+      change here touches the published copy.)</p>
       <section>
         <h3>Keyboard — move</h3>
         <div class="keys">
@@ -874,21 +875,78 @@ body {
         <kbd>Esc</kbd> discards. Outside the checklist, <kbd>Space</kbd> still ticks
         a card's next open step without descending into it.</p>
       </section>
-      <section>
-        <h3>Projects, not tasks</h3>
-        <p>A card is a project; its checklist is the detail. <strong>Blocked is a
-        flag, not a lane</strong> — a held card keeps its place in the pipeline and
-        gains a <em>waiting on</em> marker, so something code-complete still reads
-        that way while it sits.</p>
-        <p>Hence the <em>actionable</em> filter: hide what's waiting on someone else
-        and what's left is yours to pick up.</p>
-      </section>
-      <section>
-        <h3>Starting clean</h3>
-        <p>Wipes everything back to three empty lanes. Your published <code>board.json</code>
-        is untouched until you export a new one and deploy it.</p>
-        <p><button class="btn is-danger" id="wipeBtn">Clear board &amp; start empty</button></p>
-      </section>
+      <details class="more">
+        <summary>Publishing, hosting, and the JSON</summary>
+        <div class="more__grid">
+          <section>
+            <h3>How publishing works</h3>
+            <p>The board renders whatever is in <code>board.json</code> sitting next to this file. Editing here changes only your own browser's copy — anyone visiting can toggle edit too, and it never touches what you published.</p>
+            <p>To update a DEN board: edit → <strong>Export</strong> → drop the new <code>board.json</code> next to <code>index.html</code> → deploy.</p>
+          </section>
+          <section>
+            <h3>Cloudflare Pages</h3>
+            <p>Once, to make the project and take the domain:</p>
+            <pre>npx wrangler login
+npx wrangler pages project create den \
+  --production-branch main</pre>
+            <p>Then every publish is <code>./publish.sh</code> — it checks the JSON, keeps
+            the last one as <code>board.bak.json</code>, and uploads <code>index.html</code>,
+            <code>board.json</code> and <code>_headers</code> from a staging directory, so
+            nothing else in the folder goes public by accident. Point it at a fresh export
+            to take that first:</p>
+            <pre>./publish.sh ~/Downloads/board.json</pre>
+            <p>Connecting the repo to Git instead would publish the app without the board —
+            <code>board.json</code> is data, and stays out of version control.</p>
+          </section>
+          <section>
+            <h3>Your own VPS</h3>
+            <p>It's two static files — any web server will do. With Caddy:</p>
+            <pre>board.example.com {
+    root * /srv/board
+    file_server
+}</pre>
+            <p>Then <code>scp index.html board.json vps:/srv/board/</code> after each export. Add <code>basicauth</code> on a <code>/edit</code> path if you ever want the write side gated.</p>
+          </section>
+          <section>
+            <h3>The JSON</h3>
+            <p>Hand-editable if you wish. Lanes hold cards, ids are strings, dates are ISO 8601.</p>
+            <pre>{
+  "schema": "kanban.v1",
+  "title": "Projects",
+  "lanes": [{
+    "id": "l1",
+    "name": "Building",
+    "tone": "hot",
+    "cards": [{
+      "id": "c1",
+      "title": "Public project board",
+      "note": "Optional detail.",
+      "tags": ["web"],
+      "link": "https://example.com",
+      "created": "2026-07-08T10:00:00Z",
+      "updated": "2026-07-28T09:00:00Z",
+      "moved": "2026-07-26T18:00:00Z",
+      "movedFrom": "To do",
+      "movedBy": 1
+    }]
+  }]
+}</pre>
+            <p><code>moved</code> is stamped whenever a card crosses into another lane —
+            the card then reads <em>→ moved 2d ago</em> instead of its edit date, and wears
+            a hot mark for the first three days. Reordering within a lane isn't a move.</p>
+            <p><code>movedBy</code> is how many lanes it crossed and which way: positive
+            is rightward, one arrow per lane. Leave it out and it's worked back out from
+            <code>movedFrom</code>; leave all three out for a card that has never
+            travelled.</p>
+          </section>
+          <section>
+            <h3>Starting clean</h3>
+            <p><strong>Clear board</strong>, top right, wipes everything back to three
+            empty lanes and drops you into edit mode. Your published <code>board.json</code>
+            is untouched until you export a new one and deploy it.</p>
+          </section>
+        </div>
+      </details>
     </div>
   </footer>
 </div>
@@ -978,6 +1036,17 @@ function fmtRel(iso) {
   return `${Math.floor(days / 365)}y ago`;
 }
 
+/* Which way it came, and how far. A card sitting in the middle of the board
+   says nothing about its own direction of travel — one lane forward and three
+   lanes back look identical once it has landed. One arrow per lane crossed
+   reads at a glance; past three that stops being true, so it counts instead. */
+function moveArrow(n) {
+  if (!n) return "";
+  const glyph = n > 0 ? "→" : "←";
+  const far = Math.abs(n);
+  return far <= 3 ? glyph.repeat(far) : `${glyph}×${far}`;
+}
+
 /* Moves within this window still count as news, and get the hot wash. */
 const FRESH_MOVE_MS = 3 * 24 * 60 * 60 * 1000;
 const movedRecently = (card) =>
@@ -1019,11 +1088,22 @@ function findCard(id) {
   return null;
 }
 
+/* How far the card travelled, signed: right is positive, the way the lanes run.
+   A hand-written board.json — or one published before this was recorded — only
+   names the lane it came from, so fall back to finding that name on the board. */
+function moveDelta(c, laneIdx, laneNames) {
+  if (!c || typeof c.moved !== "string" || !c.moved) return 0;
+  if (Number.isFinite(c.movedBy) && c.movedBy) return Math.trunc(c.movedBy);
+  const from = typeof c.movedFrom === "string" ? laneNames.indexOf(c.movedFrom.trim()) : -1;
+  return from > -1 ? laneIdx - from : 0;
+}
+
 /* ── Normalise anything that claims to be a board ─────────── */
 function normalize(raw) {
   if (!raw || typeof raw !== "object") throw new Error("Not a JSON object.");
   const lanes = Array.isArray(raw.lanes) ? raw.lanes : null;
   if (!lanes) throw new Error("No “lanes” array. Expected " + SCHEMA + ".");
+  const laneNames = lanes.map((l) => (l && typeof l.name === "string") ? l.name.trim() : "");
   const seen = new Set();
   const uniq = (id, p) => {
     let v = typeof id === "string" && id ? id : uid(p);
@@ -1035,12 +1115,13 @@ function normalize(raw) {
     schema: SCHEMA,
     title: typeof raw.title === "string" && raw.title.trim() ? raw.title.trim() : "Board",
     updated: typeof raw.updated === "string" ? raw.updated : nowISO(),
-    lanes: lanes.map((l) => ({
+    lanes: lanes.map((l, li) => ({
       id: uniq(l && l.id, "l"),
       name: (l && typeof l.name === "string" && l.name.trim()) ? l.name.trim() : "Untitled lane",
       tone: TONES.includes(l && l.tone) ? l.tone : "grey",
       cards: (Array.isArray(l && l.cards) ? l.cards : []).map((c) => ({
         id: uniq(c && c.id, "c"),
+        movedBy: moveDelta(c, li, laneNames),
         title: (c && typeof c.title === "string") ? c.title : "Untitled",
         note: (c && typeof c.note === "string") ? c.note : "",
         tags: Array.isArray(c && c.tags) ? c.tags.filter((t) => typeof t === "string" && t.trim()).map((t) => t.trim()) : [],
@@ -1074,7 +1155,7 @@ function exportable(b) {
         id: c.id, title: c.title, note: c.note, tags: c.tags,
         link: c.link, steps: c.steps, blockedOn: c.blockedOn,
         created: c.created, updated: c.updated,
-        ...(c.moved ? { moved: c.moved, movedFrom: c.movedFrom } : {})
+        ...(c.moved ? { moved: c.moved, movedFrom: c.movedFrom, movedBy: c.movedBy } : {})
       }))
     }))
   };
@@ -1490,8 +1571,11 @@ function cardEl(card, lane) {
         + (card.moved ? " is-moved" : "")
         + (fresh ? " is-fresh" : "");
       t.dateTime = when;
-      t.textContent = (card.moved ? "moved " : "") + fmtRel(when);
+      const arrow = card.moved ? moveArrow(card.movedBy) : "";
+      t.textContent = (arrow ? arrow + " " : "") + (card.moved ? "moved " : "") + fmtRel(when);
       t.title = historyLine(card, lane && lane.name);
+      // Arrows are for the eye; give a screen reader the sentence instead.
+      t.setAttribute("aria-label", t.title);
       meta.append(t);
     }
     el.append(meta);
@@ -1515,7 +1599,7 @@ function addCard(lane, at = lane.cards.length) {
     id: uid("c"), title: "", note: "", tags: [], link: "",
     steps: [], blockedOn: "",
     created: nowISO(), updated: nowISO(),
-    moved: "", movedFrom: ""
+    moved: "", movedFrom: "", movedBy: 0
   };
   lane.cards.splice(at, 0, card);
   selectedId = card.id;
@@ -1534,6 +1618,7 @@ function moveCard(id, toLaneId, toIndex) {
   if (crossed) {
     found.card.moved = nowISO();
     found.card.movedFrom = found.lane.name;
+    found.card.movedBy = board.lanes.indexOf(dest) - board.lanes.indexOf(found.lane);
   }
   found.card.updated = nowISO();
   touch();
@@ -1763,7 +1848,7 @@ function carry(dir, n) {
 
 function deleteAt(c, yankOnly) {
   register = JSON.parse(JSON.stringify(c.card));
-  registerFrom = c.lane.name;
+  registerFrom = { id: c.lane.id, name: c.lane.name };
   if (yankOnly) { say(`Copied “${c.card.title || "untitled"}”.`); return; }
   checkpoint();
   const found = findCard(c.card.id);
@@ -1789,9 +1874,11 @@ function paste(after) {
   checkpoint();
   const copy = { ...JSON.parse(JSON.stringify(register)), id: uid("c"), updated: nowISO() };
   // dd then p in another lane is a move by another route — stamp it like one.
-  if (registerFrom && registerFrom !== lane.name) {
+  if (registerFrom && registerFrom.id !== lane.id) {
+    const from = board.lanes.findIndex((l) => l.id === registerFrom.id);
     copy.moved = nowISO();
-    copy.movedFrom = registerFrom;
+    copy.movedFrom = registerFrom.name;
+    copy.movedBy = from > -1 ? board.lanes.indexOf(lane) - from : 0;
   }
   const at = c ? realIndex(lane, c.ci) + (after ? 1 : 0) : lane.cards.length;
   lane.cards.splice(at, 0, copy);
